@@ -200,9 +200,6 @@ class BiomeBot:
             
             db.commit()
             
-            # Send introductory message
-            await thread.send("I'm here to answer any questions related to your microbiome - but first let me ask you a few questions for higher quality answers..")
-            
             # Initial analysis based on extracted date
             if processed_data['metadata'].get('sample_date'):
                 sample_date_str = processed_data['metadata']['sample_date']
