@@ -142,32 +142,37 @@ Remember: You're analyzing real medical data, so be accurate and suggest consult
             print(f"Error in OpenAI chat completion: {e}")
             raise
 
-    def generate_diet_and_health_predictions(self, pdf_content: str, user_metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate predictions about user's diet and health based on microbiome report"""
+    def generate_diet_prediction(self, pdf_content: str, user_metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate diet prediction only based on microbiome report"""
         
-        prompt = f"""Based on this microbiome report, analyze the bacterial composition and make educated predictions about:
+        prompt = f"""Based on this microbiome report, analyze the bacterial composition and predict what this person typically eats.
 
-1. DIET PREDICTION: What does their gut bacteria suggest they typically eat? (plant-heavy, meat-heavy, processed foods, fiber intake, etc.)
-2. DIGESTIVE SYMPTOMS: What digestive issues might they be experiencing? (bloating, irregularity, gas, etc.)
-3. HEALTH PATTERNS: Any other health concerns their microbiome might indicate?
+Look at bacterial ratios like:
+- Bacteroidetes vs Firmicutes (plant vs animal diet)
+- Prevotella (fiber/carbs)
+- Akkermansia (healthy fiber)
+- Other dietary indicator bacteria
+
+Make ONE specific prediction about their typical diet patterns (plant-heavy, meat-heavy, processed foods, fiber intake, etc.).
 
 Microbiome Report Content:
 {pdf_content[:3000]}
 
-Format your response as 3 clear predictions with brief explanations. Be specific but acknowledge these are educated guesses that need confirmation.
-Keep under 1500 characters total."""
+Sample Age: {user_metadata.get('sample_age_months', 'unknown')} months old
+
+Keep response under 500 characters. Be specific but note this is an educated guess."""
 
         try:
             response = self.client.chat.completions.create(
                 model=CHAT_MODEL,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=600,
+                max_tokens=200,
                 temperature=0.7
             )
             
             content = response.choices[0].message.content
-            if content and len(content) > 1500:
-                content = content[:1497] + "..."
+            if content and len(content) > 500:
+                content = content[:497] + "..."
             
             input_tokens = response.usage.prompt_tokens
             output_tokens = response.usage.completion_tokens
@@ -181,7 +186,54 @@ Keep under 1500 characters total."""
             }
             
         except Exception as e:
-            print(f"Error generating predictions: {e}")
+            print(f"Error generating diet prediction: {e}")
+            raise
+
+    def generate_digestive_prediction(self, pdf_content: str, user_metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate digestive symptoms prediction based on microbiome report"""
+        
+        prompt = f"""Based on this microbiome report and user's dietary patterns, predict what digestive symptoms they might experience.
+
+Look for:
+- Bacterial imbalances that cause bloating
+- Low diversity causing irregularity
+- Inflammatory bacteria causing discomfort
+- Missing beneficial bacteria
+
+User's diet response: {user_metadata.get('diet_response', 'Not provided')}
+
+Microbiome Report Content:
+{pdf_content[:2000]}
+
+Make ONE specific prediction about digestive symptoms they likely experience (bloating, irregularity, gas, etc.) or if their gut looks healthy.
+
+Keep under 300 characters. Be specific but note this is an educated guess."""
+
+        try:
+            response = self.client.chat.completions.create(
+                model=CHAT_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=150,
+                temperature=0.7
+            )
+            
+            content = response.choices[0].message.content
+            if content and len(content) > 300:
+                content = content[:297] + "..."
+            
+            input_tokens = response.usage.prompt_tokens
+            output_tokens = response.usage.completion_tokens
+            cost = self.calculate_chat_cost(input_tokens, output_tokens)
+            
+            return {
+                "content": content,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "cost_usd": cost
+            }
+            
+        except Exception as e:
+            print(f"Error generating digestive prediction: {e}")
             raise
 
     def generate_executive_summary(self, pdf_content: str, user_metadata: Dict[str, Any]) -> Dict[str, Any]:

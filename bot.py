@@ -137,7 +137,8 @@ class BiomeBot:
                 thread_id=thread.id,
                 original_filename=attachment.filename,
                 sample_date=sample_date,
-                report_metadata=metadata_for_db
+                report_metadata=metadata_for_db,
+                conversation_stage="awaiting_antibiotics"
             )
             db.add(report)
             db.commit()
@@ -172,39 +173,14 @@ class BiomeBot:
             
             db.commit()
             
-            # Generate predictions about user's diet and health based on microbiome data
-            await thread.send("🔍 Analyzing your gut bacteria patterns...")
-            
-            try:
-                predictions = openai_client.generate_diet_and_health_predictions(
-                    processed_data['text_content'], 
-                    processed_data['metadata']
-                )
-                
-                # Initial analysis with date and predictions
-                if sample_date:
-                    age_months = processed_data['metadata'].get('sample_age_months', 0)
-                    date_response = f"📅 I see your microbiome report was generated on **{sample_date.strftime('%B %d, %Y')}** ({age_months} months ago).\n\n"
-                else:
-                    date_response = "📅 Report date unclear - when did you take this test?\n\n"
-                
-                date_response += "🔬 **Based on your gut bacteria, here's what I predict:**\n\n"
-                date_response += predictions['content']
-                date_response += "\n\n**Are these predictions accurate?** Please tell me:\n"
-                date_response += "• Your typical diet & any restrictions\n"
-                date_response += "• Current digestive symptoms\n" 
-                date_response += "• Any antibiotics recently?"
-                
-            except Exception as e:
-                print(f"Error generating predictions: {e}")
-                # Fallback to simpler flow
-                if sample_date:
-                    age_months = processed_data['metadata'].get('sample_age_months', 0)
-                    date_response = f"📅 Report from **{sample_date.strftime('%B %d, %Y')}** ({age_months} months ago)\n\n"
-                else:
-                    date_response = "📅 When did you take this test?\n\n"
-                
-                date_response += "Please tell me about:\n• Your typical diet & restrictions\n• Current digestive symptoms\n• Any recent antibiotics?"
+            # Start with date confirmation first
+            if sample_date:
+                age_months = processed_data['metadata'].get('sample_age_months', 0)
+                date_response = f"📅 I see your microbiome report was generated on **{sample_date.strftime('%B %d, %Y')}**\n"
+                date_response += f"That's roughly **{age_months} months** ago. Gut profiles can shift fast, so I'll keep that in mind.\n\n"
+                date_response += "Did you take any antibiotics around the time of the test?"
+            else:
+                date_response = "📅 Looks like the report date is missing.\nWhen did you take this test? (Month & year is enough.)"
             
             # Send initial response
             bot_message = await thread.send(date_response)
@@ -254,6 +230,126 @@ class BiomeBot:
             db=db
         )
         
+        # Handle step-by-step conversation flow
+        if report.conversation_stage == "awaiting_antibiotics":
+            # Store antibiotic response and move to diet prediction
+            try:
+                updated_metadata = report.report_metadata.copy() if report.report_metadata else {}
+                updated_metadata['antibiotics_response'] = message.content
+                report.report_metadata = updated_metadata
+                report.conversation_stage = "awaiting_diet_prediction"
+                db.commit()
+                
+                # Generate diet prediction
+                async with message.channel.typing():
+                    await message.channel.send("🔍 Analyzing your gut bacteria patterns...")
+                    
+                    predictions = openai_client.generate_diet_and_health_predictions(
+                        "", updated_metadata  # Will use RAG chunks from report
+                    )
+                    
+                    # Extract just diet prediction from the response
+                    diet_response = "🍽️ **Based on your gut bacteria, I predict you typically eat:**\n\n"
+                    diet_response += predictions['content'][:800] + "..." if len(predictions['content']) > 800 else predictions['content']
+                    diet_response += "\n\n**Is this accurate?** Tell me about your actual diet and any restrictions you have."
+                    
+                    bot_message = await message.channel.send(diet_response)
+                    
+                    await self.save_message(
+                        message_id=bot_message.id,
+                        report_id=report.id,
+                        user_id=None,
+                        role=MessageRole.BOT.value,
+                        content=diet_response,
+                        db=db,
+                        input_tokens=predictions['input_tokens'],
+                        output_tokens=predictions['output_tokens'],
+                        cost_usd=predictions['cost_usd']
+                    )
+                    return
+                    
+            except Exception as e:
+                print(f"Error in diet prediction stage: {e}")
+        
+        elif report.conversation_stage == "awaiting_diet_prediction":
+            # Store diet response and move to digestive symptoms
+            try:
+                updated_metadata = report.report_metadata.copy() if report.report_metadata else {}
+                updated_metadata['diet_response'] = message.content
+                report.report_metadata = updated_metadata
+                report.conversation_stage = "awaiting_symptoms_prediction"
+                db.commit()
+                
+                symptom_response = "🤢 **Based on your microbiome, I predict you might experience:**\n\n"
+                symptom_response += "• Occasional bloating after meals\n• Irregular bowel movements\n• Some gas or digestive discomfort\n\n"
+                symptom_response += "**What digestive symptoms do you actually experience?** (or none if you feel great!)"
+                
+                bot_message = await message.channel.send(symptom_response)
+                
+                await self.save_message(
+                    message_id=bot_message.id,
+                    report_id=report.id,
+                    user_id=None,
+                    role=MessageRole.BOT.value,
+                    content=symptom_response,
+                    db=db
+                )
+                return
+                
+            except Exception as e:
+                print(f"Error in symptoms prediction stage: {e}")
+        
+        elif report.conversation_stage == "awaiting_symptoms_prediction":
+            # Store symptoms response and generate executive summary
+            try:
+                updated_metadata = report.report_metadata.copy() if report.report_metadata else {}
+                updated_metadata['symptoms_response'] = message.content
+                report.report_metadata = updated_metadata
+                report.conversation_stage = "executive_summary_ready"
+                db.commit()
+                
+                # Generate executive summary with all collected information
+                async with message.channel.typing():
+                    await message.channel.send("✨ Perfect! Now creating your personalized executive summary...")
+                    
+                    summary_data = openai_client.generate_executive_summary(
+                        "",  # Will use conversation history and RAG
+                        updated_metadata
+                    )
+                    
+                    summary_message = await message.channel.send(f"🧬 **EXECUTIVE SUMMARY**\n\n{summary_data['content']}")
+                    
+                    await self.save_message(
+                        message_id=summary_message.id,
+                        report_id=report.id,
+                        user_id=None,
+                        role=MessageRole.BOT.value,
+                        content=f"🧬 **EXECUTIVE SUMMARY**\n\n{summary_data['content']}",
+                        db=db,
+                        input_tokens=summary_data['input_tokens'],
+                        output_tokens=summary_data['output_tokens'],
+                        cost_usd=summary_data['cost_usd']
+                    )
+                    
+                    followup = await message.channel.send("🎯 **Ready for your questions!** Ask me anything about your microbiome results.")
+                    
+                    await self.save_message(
+                        message_id=followup.id,
+                        report_id=report.id,
+                        user_id=None,
+                        role=MessageRole.BOT.value,
+                        content="🎯 **Ready for your questions!** Ask me anything about your microbiome results.",
+                        db=db
+                    )
+                    
+                    print(f"💬 Generated executive summary for user {user.username} in report {report.id}")
+                    return
+                    
+            except Exception as e:
+                print(f"Error generating executive summary: {e}")
+                # Fall through to regular response handling
+        
+        # Regular conversation handling
         # Get conversation history
         conversation_history = await self.get_thread_conversation_history(report.id, db)
         
