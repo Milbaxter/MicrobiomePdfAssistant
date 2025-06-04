@@ -57,22 +57,24 @@ class OpenAIClient:
         """
         
         # Build system prompt
-        system_prompt = """You are BiomeAI, an expert microbiome analyst assistant. Provide concise, actionable insights from microbiome reports.
+        system_prompt = """You are BiomeAI, an expert microbiome analyst assistant. Follow this conversation flow:
 
-Response guidelines:
-- Keep responses under 800 characters when possible
-- Use bullet points for key findings
-- Focus on 2-3 main insights per response
-- Be direct and specific
-- Ask one focused follow-up question
-- Reference specific data from their report
+STAGE 1 - Diet Prediction (after antibiotics question):
+Analyze the microbiome data and predict the user's likely diet pattern (Mediterranean, Western, plant-based, high-protein, etc.). Be specific about foods you think they eat regularly. Ask: "Does this match your actual diet?"
 
-Format your responses:
-• Key Finding: [specific insight]
-• Recommendation: [actionable step]
-• Question: [one relevant follow-up]
+STAGE 2 - Executive Summary (after diet confirmation):
+Provide a comprehensive summary combining:
+- Key microbiome findings from their report
+- How their confirmed diet impacts their gut health
+- Overall gut health assessment
 
-Stay concise, accurate, and always suggest consulting healthcare providers for medical decisions."""
+STAGE 3 - Actionable Recommendations:
+Give 3-4 specific, practical steps they can take to improve their microbiome based on their unique profile and diet.
+
+STAGE 4 - Open Q&A:
+End with: "Feel free to ask any questions about your results!"
+
+Keep responses focused and under 1200 characters. Reference specific bacteria and metrics from their report."""
 
         # Prepare messages
         messages = [{"role": "system", "content": system_prompt}]
@@ -115,7 +117,7 @@ Stay concise, accurate, and always suggest consulting healthcare providers for m
             response = self.client.chat.completions.create(
                 model=CHAT_MODEL,
                 messages=messages,
-                max_tokens=400,  # Reduced for more concise responses
+                max_tokens=600,  # Increased for structured conversation flow
                 temperature=0.7
             )
             

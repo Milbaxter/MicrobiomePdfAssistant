@@ -214,7 +214,7 @@ class BiomeBot:
             else:
                 date_response = "Looks like the report date is missing.\nWhen did you take this test? (Month & year is enough.)\n\n"
             
-            date_response += "Did you take any antibiotics around the time of the test?"
+            date_response += "Did you take any antibiotics around the time of the test?\n\n*After you answer, I'll analyze your microbiome to predict your diet pattern.*"
             
             # Send initial response
             bot_message = await thread.send(date_response)
