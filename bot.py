@@ -336,11 +336,89 @@ class BiomeBot:
                 chunk_ids=chunk_ids
             )
             
+            # Check if we need to automatically send follow-up messages
+            await self.check_and_send_followups(message, report, conversation_history, relevant_chunks, db)
+            
             print(f"💬 Responded to user {user.username} in report {report.id}")
             
         except Exception as e:
             print(f"Error generating response: {e}")
             await message.reply("❌ Sorry, I encountered an error processing your question. Please try again.")
+
+    async def check_and_send_followups(self, message: discord.Message, report: Report, conversation_history: List[Dict[str, str]], relevant_chunks: List[str], db: Session):
+        """Check conversation stage and send automatic follow-up messages"""
+        # Analyze conversation to determine stage
+        recent_messages = conversation_history[-6:]  # Look at last 6 messages
+        
+        # Check if we just provided an executive summary (after diet confirmation)
+        if len(recent_messages) >= 2:
+            last_bot_message = None
+            for msg in reversed(recent_messages):
+                if msg['role'] == 'bot':
+                    last_bot_message = msg['content'].lower()
+                    break
+            
+            # Check if the last bot message seems to be an executive summary
+            if last_bot_message and any(keyword in last_bot_message for keyword in [
+                'summary', 'findings', 'gut health', 'microbiome', 'overall', 'profile'
+            ]) and 'recommendation' not in last_bot_message and 'feel free to ask' not in last_bot_message:
+                
+                # Send recommendations
+                await self.send_recommendations(message, report, conversation_history, relevant_chunks, db)
+                
+                # Wait a moment then send Q&A invitation
+                import asyncio
+                await asyncio.sleep(2)
+                await self.send_qa_invitation(message, report, db)
+
+    async def send_recommendations(self, message: discord.Message, report: Report, conversation_history: List[Dict[str, str]], relevant_chunks: List[str], db: Session):
+        """Send actionable recommendations as a separate message"""
+        try:
+            # Create prompt specifically for recommendations
+            recommendations_prompt = "Based on the conversation history and microbiome data, provide exactly 3 specific, actionable recommendations for improving their microbiome health. Be concise and practical."
+            
+            response_data = openai_client.create_microbiome_analysis(
+                conversation_history=conversation_history,
+                relevant_chunks=relevant_chunks,
+                user_question=recommendations_prompt
+            )
+            
+            # Send recommendations message
+            rec_message = await message.channel.send(f"**🎯 Top 3 Recommendations:**\n\n{response_data['content']}")
+            
+            # Save to database
+            await self.save_message(
+                message_id=rec_message.id,
+                report_id=report.id,
+                user_id=None,
+                role=MessageRole.BOT.value,
+                content=response_data['content'],
+                db=db,
+                input_tokens=response_data['input_tokens'],
+                output_tokens=response_data['output_tokens'],
+                cost_usd=response_data['cost_usd']
+            )
+            
+        except Exception as e:
+            print(f"Error sending recommendations: {e}")
+
+    async def send_qa_invitation(self, message: discord.Message, report: Report, db: Session):
+        """Send Q&A invitation as a separate message"""
+        try:
+            qa_message = await message.channel.send("❓ **Feel free to ask any questions about your results!**")
+            
+            # Save to database
+            await self.save_message(
+                message_id=qa_message.id,
+                report_id=report.id,
+                user_id=None,
+                role=MessageRole.BOT.value,
+                content="Feel free to ask any questions about your results!",
+                db=db
+            )
+            
+        except Exception as e:
+            print(f"Error sending Q&A invitation: {e}")
 
 # Initialize bot instance
 biome_bot = BiomeBot()
