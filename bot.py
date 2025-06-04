@@ -13,11 +13,10 @@ from pdf_processor import PDFProcessor
 from openai_client import OpenAIClient
 from config import DISCORD_TOKEN, BOT_MENTION_NAME, MAX_CHUNKS_PER_QUERY
 
-# Bot configuration - use minimal intents to avoid privileged intent issues
-intents = discord.Intents.none()
-intents.guilds = True
-intents.guild_messages = True
+# Bot configuration
+intents = discord.Intents.default()
 intents.message_content = True
+intents.guilds = True
 
 bot = commands.Bot(command_prefix='!', intents=intents)
 pdf_processor = PDFProcessor()
