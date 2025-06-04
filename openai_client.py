@@ -75,18 +75,44 @@ Your response should:
 Keep it concise and conversational. Reference specific bacteria from their report that indicate certain dietary patterns."""
             
         elif any(keyword in recent_content for keyword in ["diet", "allergy", "eating", "food"]) and len([msg for msg in last_messages if msg.get("role") == "user"]) >= 2:
-            # Executive summary stage (after diet confirmation)
-            system_prompt = """You are BiomeAI, an expert microbiome analyst.
+            # Check if this is energy/digestive prediction stage (right after diet confirmation)
+            user_messages = [msg for msg in last_messages if msg.get("role") == "user"]
+            bot_messages = [msg for msg in last_messages if msg.get("role") == "bot"]
+            
+            # Look for recent diet-related user response that doesn't mention energy/digestive issues
+            recent_user_content = " ".join([msg["content"].lower() for msg in user_messages[-2:]])
+            recent_bot_content = " ".join([msg["content"].lower() for msg in bot_messages[-2:]])
+            
+            if (any(diet_word in recent_user_content for diet_word in ["diet", "eating", "food", "allergy"]) and 
+                not any(energy_word in recent_user_content for energy_word in ["energy", "digestive", "bloating", "tired"]) and
+                not any(energy_word in recent_bot_content for energy_word in ["energy", "digestive", "bloating"])):
+                
+                # Energy/digestive prediction stage
+                system_prompt = """You are BiomeAI, an expert microbiome analyst.
 
-Your task: Provide an executive summary combining the microbiome report with the user's confirmed diet and lifestyle information.
+Your task: Based on the microbiome report and confirmed diet, predict the user's energy levels and digestive issues.
+
+Your response should:
+1. Analyze the microbial patterns to predict their likely energy state (high energy, low energy, energy crashes, etc.)
+2. Predict likely digestive issues based on their microbiome (bloating, gas, irregular bowel movements, etc.)
+3. Be specific about what the bacteria in their report suggest about these symptoms
+4. End with: "Is this accurate? Please describe any digestive issues you experience and your typical energy levels throughout the day."
+
+Keep it focused and reference specific bacteria from their report."""
+                
+            else:
+                # Executive summary stage (after energy/digestive confirmation)
+                system_prompt = """You are BiomeAI, an expert microbiome analyst.
+
+Your task: Provide an executive summary combining the microbiome report with the user's confirmed diet, energy, and digestive information.
 
 Your response MUST start with: "Executive Summary of microbiome report and lifestyle:"
 
 Then provide a comprehensive summary covering:
 - Key microbiome findings from their report
 - How their confirmed diet impacts their gut health
+- Integration of their energy levels and digestive symptoms
 - Overall gut health assessment
-- Integration of lifestyle factors
 
 Keep it focused and informative. DO NOT include recommendations in this message - that comes separately next."""
             
