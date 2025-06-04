@@ -361,11 +361,11 @@ class BiomeBot:
                 
                 # Look for executive summary that starts with "executive summary"
                 if (last_bot_message.startswith('executive summary') and 
-                    'recommendation' not in last_bot_message and 
+                    'actionable insight' not in last_bot_message and 
                     'feel free to ask' not in last_bot_message):
                     
-                    # Send recommendations
-                    await self.send_recommendations(message, report, conversation_history, relevant_chunks, db)
+                    # Send one actionable insight
+                    await self.send_actionable_insight(message, report, conversation_history, relevant_chunks, db)
                     
                     # Wait a moment then send Q&A invitation
                     import asyncio
@@ -407,6 +407,42 @@ class BiomeBot:
             
         except Exception as e:
             print(f"Error sending recommendations: {e}")
+
+    async def send_actionable_insight(self, message: discord.Message, report: Report, conversation_history: List[Dict[str, str]], relevant_chunks: List[str], db: Session):
+        """Send one actionable insight as a separate message"""
+        try:
+            # Create prompt for actionable insight
+            insight_prompt = "Based on the conversation history and microbiome data, provide exactly one specific, actionable insight the user can implement immediately to improve their gut health. Be concise and practical."
+            
+            response_data = openai_client.create_microbiome_analysis(
+                conversation_history=conversation_history,
+                relevant_chunks=relevant_chunks,
+                user_question=insight_prompt
+            )
+            
+            # Ensure the response starts with the correct prefix
+            content = response_data['content']
+            if not content.lower().startswith('one actionable insight'):
+                content = f"One actionable insight\n\n{content}"
+            
+            # Send insight message
+            insight_message = await message.channel.send(content)
+            
+            # Save to database
+            await self.save_message(
+                message_id=insight_message.id,
+                report_id=report.id,
+                user_id=None,
+                role=MessageRole.BOT.value,
+                content=content,
+                db=db,
+                input_tokens=response_data['input_tokens'],
+                output_tokens=response_data['output_tokens'],
+                cost_usd=response_data['cost_usd']
+            )
+            
+        except Exception as e:
+            print(f"Error sending actionable insight: {e}")
 
     async def send_qa_invitation(self, message: discord.Message, report: Report, db: Session):
         """Send Q&A invitation as a separate message"""
