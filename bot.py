@@ -366,13 +366,23 @@ class BiomeBot:
                     
                     print(f"🎯 Detected executive summary, sending follow-ups...")
                     
-                    # Send one actionable insight
-                    await self.send_actionable_insight(message, report, conversation_history, relevant_chunks, db)
-                    
-                    # Wait a moment then send Q&A invitation
-                    import asyncio
-                    await asyncio.sleep(2)
-                    await self.send_qa_invitation(message, report, db)
+                    try:
+                        # Send one actionable insight
+                        print(f"📝 Sending actionable insight...")
+                        await self.send_actionable_insight(message, report, conversation_history, relevant_chunks, db)
+                        print(f"✅ Actionable insight sent")
+                        
+                        # Wait a moment then send Q&A invitation
+                        import asyncio
+                        await asyncio.sleep(2)
+                        print(f"❓ Sending Q&A invitation...")
+                        await self.send_qa_invitation(message, report, db)
+                        print(f"✅ Q&A invitation sent")
+                        
+                    except Exception as e:
+                        print(f"❌ Error in follow-up messages: {e}")
+                        import traceback
+                        traceback.print_exc()
 
     async def send_recommendations(self, message: discord.Message, report: Report, conversation_history: List[Dict[str, str]], relevant_chunks: List[str], db: Session):
         """Send actionable recommendations as a separate message"""
