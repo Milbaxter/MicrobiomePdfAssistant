@@ -359,13 +359,10 @@ class BiomeBot:
             if len(bot_messages) >= 1:
                 last_bot_message = bot_messages[-1]['content'].lower()
                 
-                # Look for executive summary that mentions diet but doesn't have recommendations yet
-                if (any(keyword in last_bot_message for keyword in [
-                    'summary', 'findings', 'gut health', 'microbiome', 'overall', 'profile', 'diet'
-                ]) and 'recommendation' not in last_bot_message and 'feel free to ask' not in last_bot_message
-                and any(diet_keyword in last_bot_message for diet_keyword in [
-                    'diet', 'eating', 'food', 'nutrition'
-                ])):
+                # Look for executive summary that starts with "executive summary"
+                if (last_bot_message.startswith('executive summary') and 
+                    'recommendation' not in last_bot_message and 
+                    'feel free to ask' not in last_bot_message):
                     
                     # Send recommendations
                     await self.send_recommendations(message, report, conversation_history, relevant_chunks, db)
@@ -387,8 +384,13 @@ class BiomeBot:
                 user_question=recommendations_prompt
             )
             
+            # Ensure the response starts with the correct prefix
+            content = response_data['content']
+            if not content.lower().startswith('top 3 actionable recommendations'):
+                content = f"Top 3 actionable recommendations\n\n{content}"
+            
             # Send recommendations message
-            rec_message = await message.channel.send(f"**🎯 Top 3 Recommendations:**\n\n{response_data['content']}")
+            rec_message = await message.channel.send(content)
             
             # Save to database
             await self.save_message(
@@ -396,7 +398,7 @@ class BiomeBot:
                 report_id=report.id,
                 user_id=None,
                 role=MessageRole.BOT.value,
-                content=response_data['content'],
+                content=content,
                 db=db,
                 input_tokens=response_data['input_tokens'],
                 output_tokens=response_data['output_tokens'],
@@ -409,7 +411,8 @@ class BiomeBot:
     async def send_qa_invitation(self, message: discord.Message, report: Report, db: Session):
         """Send Q&A invitation as a separate message"""
         try:
-            qa_message = await message.channel.send("❓ **Feel free to ask any questions about your results!**")
+            qa_content = "Feel free to ask any questions about your results!"
+            qa_message = await message.channel.send(qa_content)
             
             # Save to database
             await self.save_message(
@@ -417,7 +420,7 @@ class BiomeBot:
                 report_id=report.id,
                 user_id=None,
                 role=MessageRole.BOT.value,
-                content="Feel free to ask any questions about your results!",
+                content=qa_content,
                 db=db
             )
             

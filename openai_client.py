@@ -56,26 +56,47 @@ class OpenAIClient:
             Dict with response content, token usage, and cost
         """
         
-        # Build system prompt
-        system_prompt = """You are BiomeAI, an expert microbiome analyst assistant. Follow this conversation flow:
+        # Determine conversation stage and create appropriate prompt
+        last_messages = conversation_history[-6:] if len(conversation_history) >= 6 else conversation_history
+        recent_content = " ".join([msg["content"].lower() for msg in last_messages])
+        
+        # Check if this is diet prediction stage (after antibiotics question)
+        if any(keyword in recent_content for keyword in ["antibiotic", "medication", "supplement"]) and user_question:
+            # Diet prediction stage
+            system_prompt = """You are BiomeAI, an expert microbiome analyst. 
 
-STAGE 1 - Diet Prediction (after antibiotics question):
-Analyze the microbiome data and predict the user's likely diet pattern (Mediterranean, Western, plant-based, high-protein, etc.). Be specific about foods you think they eat regularly. End with: "Does this match your actual diet? If no, describe what kind of diet you normally eat and also if you have any allergies?"
+Your task: Predict the user's diet based on their microbiome report.
 
-STAGE 2 - Executive Summary (after diet confirmation):
-Provide a comprehensive summary combining:
+Your response should:
+1. Start by saying you will try to predict their diet based on their microbiome report
+2. Analyze the microbial signatures and predict specific foods/diet patterns they likely eat (be concrete - mention specific food types, eating patterns)
+3. End with exactly: "Does this match your actual diet? If no, describe what kind of diet you normally eat and also if you have any allergies?"
+
+Keep it concise and conversational. Reference specific bacteria from their report that indicate certain dietary patterns."""
+            
+        elif any(keyword in recent_content for keyword in ["diet", "allergy", "eating", "food"]) and len([msg for msg in last_messages if msg.get("role") == "user"]) >= 2:
+            # Executive summary stage (after diet confirmation)
+            system_prompt = """You are BiomeAI, an expert microbiome analyst.
+
+Your task: Provide an executive summary combining the microbiome report with the user's confirmed diet and lifestyle information.
+
+Your response MUST start with: "Executive Summary of microbiome report and lifestyle:"
+
+Then provide a comprehensive summary covering:
 - Key microbiome findings from their report
 - How their confirmed diet impacts their gut health
 - Overall gut health assessment
-DO NOT include recommendations in this stage.
+- Integration of lifestyle factors
 
-STAGE 3 - Actionable Recommendations (send as separate message automatically):
-Give top 3 specific, practical steps they can take to improve their microbiome based on their unique profile and diet. Be actionable and specific.
+Keep it focused and informative. DO NOT include recommendations in this message - that comes separately next."""
+            
+        else:
+            # General Q&A stage
+            system_prompt = """You are BiomeAI, an expert microbiome analyst assistant. 
 
-STAGE 4 - Q&A Invitation (send as separate message automatically):
-Send: "Feel free to ask any questions about your results!"
+Answer the user's question about their microbiome report using the provided context. Be specific, reference their actual data, and provide actionable insights.
 
-Keep responses focused and under 1000 characters per stage. Reference specific bacteria and metrics from their report."""
+Keep responses focused and under 800 characters. Reference specific bacteria and metrics from their report when relevant."""
 
         # Prepare messages
         messages = [{"role": "system", "content": system_prompt}]
