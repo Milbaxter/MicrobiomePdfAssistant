@@ -26,7 +26,7 @@ class Report(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
-    thread_id = Column(BigInteger, nullable=False, unique=True)  # Discord thread ID
+    thread_id = Column(BigInteger, nullable=False)  # Discord thread ID
     original_filename = Column(String(255))
     sample_date = Column(DateTime(timezone=True))
     report_metadata = Column(JSON, default=dict)  # Store additional info like user details
