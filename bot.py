@@ -111,29 +111,40 @@ class BiomeBot:
         user = await self.ensure_user_exists(message.author, db)
         
         try:
-            # Check if a thread already exists for this message
-            existing_thread = None
-            if hasattr(message, 'thread') and message.thread:
-                existing_thread = message.thread
-            else:
-                # Look for existing threads created from this message
-                for thread in message.guild.threads:
-                    if thread.owner_id == message.author.id and thread.name.endswith(message.author.display_name):
-                        existing_thread = thread
-                        break
-            
-            # Download PDF
+            # Download PDF first
             pdf_bytes = await attachment.read()
             
-            # Create thread for this report only if one doesn't exist
-            if existing_thread:
-                thread = existing_thread
-                await thread.send("📊 Processing additional PDF analysis...")
-            else:
+            # Try to create thread, handle if one already exists
+            thread = None
+            try:
                 thread = await message.create_thread(
                     name=f"🧬 {attachment.filename} - {message.author.display_name}",
                     auto_archive_duration=10080  # 7 days
                 )
+            except discord.HTTPException as e:
+                if e.code == 160004:  # Thread already exists for this message
+                    # Find the existing thread
+                    if hasattr(message, 'thread') and message.thread:
+                        thread = message.thread
+                    else:
+                        # Search for the thread in the guild
+                        for guild_thread in message.guild.threads:
+                            if guild_thread.owner_id == message.author.id:
+                                # Check if this thread was created from this message
+                                async for msg in guild_thread.history(limit=1, oldest_first=True):
+                                    if msg.reference and msg.reference.message_id == message.id:
+                                        thread = guild_thread
+                                        break
+                                if thread:
+                                    break
+                    
+                    if not thread:
+                        await message.reply("❌ Thread creation failed. Please try uploading your PDF again.")
+                        return
+                    
+                    await thread.send("📊 Processing additional PDF analysis...")
+                else:
+                    raise e
             
             # Process PDF
             await thread.send("📊 Analyzing your microbiome report...")
