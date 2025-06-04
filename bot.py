@@ -111,14 +111,29 @@ class BiomeBot:
         user = await self.ensure_user_exists(message.author, db)
         
         try:
+            # Check if a thread already exists for this message
+            existing_thread = None
+            if hasattr(message, 'thread') and message.thread:
+                existing_thread = message.thread
+            else:
+                # Look for existing threads created from this message
+                for thread in message.guild.threads:
+                    if thread.owner_id == message.author.id and thread.name.endswith(message.author.display_name):
+                        existing_thread = thread
+                        break
+            
             # Download PDF
             pdf_bytes = await attachment.read()
             
-            # Create thread for this report
-            thread = await message.create_thread(
-                name=f"🧬 {attachment.filename} - {message.author.display_name}",
-                auto_archive_duration=10080  # 7 days
-            )
+            # Create thread for this report only if one doesn't exist
+            if existing_thread:
+                thread = existing_thread
+                await thread.send("📊 Processing additional PDF analysis...")
+            else:
+                thread = await message.create_thread(
+                    name=f"🧬 {attachment.filename} - {message.author.display_name}",
+                    auto_archive_duration=10080  # 7 days
+                )
             
             # Process PDF
             await thread.send("📊 Analyzing your microbiome report...")
