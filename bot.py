@@ -115,60 +115,21 @@ class BiomeBot:
             pdf_bytes = await attachment.read()
             
             # Handle different channel types for thread creation
-            print(f"🔧 Processing PDF in channel: {message.channel.name if hasattr(message.channel, 'name') else 'DM'} (type: {type(message.channel)})")
-            
             if isinstance(message.channel, discord.DMChannel):
-                # For DMs, check if there's already a report for this user in this DM
-                existing_dm_report = db.query(Report).filter(
-                    Report.thread_id == message.channel.id,
-                    Report.user_id == user.id
-                ).first()
-                
-                if existing_dm_report:
-                    # Delete existing DM report and all related data to allow new upload
-                    # First delete related chunks and messages
-                    db.query(ReportChunk).filter(ReportChunk.report_id == existing_dm_report.id).delete()
-                    db.query(Message).filter(Message.report_id == existing_dm_report.id).delete()
-                    # Then delete the report
-                    db.delete(existing_dm_report)
-                    db.commit()
-                    print(f"🔄 Deleted existing DM report for user {user.id}")
-                
+                # For DMs, work directly in the DM channel
                 thread = message.channel
                 await message.reply("📊 Analyzing your microbiome report...")
-                
-            elif isinstance(message.channel, discord.Thread):
-                # User uploaded PDF to an existing thread - replace the existing report
-                print(f"🔧 PDF uploaded to existing thread: {message.channel.name} (ID: {message.channel.id})")
-                
-                # Check if there's already a report for this thread
-                existing_thread_report = db.query(Report).filter(Report.thread_id == message.channel.id).first()
-                
-                if existing_thread_report:
-                    # Delete existing thread report and all related data to allow new upload
-                    print(f"🔄 Deleting existing report for thread {message.channel.id}")
-                    db.query(ReportChunk).filter(ReportChunk.report_id == existing_thread_report.id).delete()
-                    db.query(Message).filter(Message.report_id == existing_thread_report.id).delete()
-                    db.delete(existing_thread_report)
-                    db.commit()
-                
-                thread = message.channel
-                await message.reply("📊 Analyzing your new microbiome report...")
-                
             elif hasattr(message.channel, 'create_thread') and isinstance(message.channel, (discord.TextChannel, discord.ForumChannel)):
-                # Create a new thread for upload in guild text channels
-                timestamp = datetime.now().strftime("%H:%M")
-                print(f"🔧 Attempting to create thread in channel: {message.channel.name} (type: {type(message.channel)})")
+                # Create thread for guild text channels
                 try:
                     thread = await message.create_thread(
-                        name=f"🧬 {attachment.filename} - {message.author.display_name} ({timestamp})",
+                        name=f"🧬 {attachment.filename} - {message.author.display_name}",
                         auto_archive_duration=10080  # 7 days
                     )
-                    print(f"✅ Thread created successfully: {thread.name} (ID: {thread.id})")
                     await thread.send("📊 Analyzing your microbiome report...")
                 except discord.HTTPException as e:
                     # If thread creation fails, fall back to replying in channel
-                    print(f"❌ Thread creation failed: {e}")
+                    print(f"Thread creation failed: {e}")
                     thread = message.channel
                     await message.reply("📊 Analyzing your microbiome report...")
             else:
@@ -189,7 +150,7 @@ class BiomeBot:
             # Use the appropriate channel ID for thread_id
             thread_id = thread.id
             
-            # Create new report record
+            # Create report record
             report = Report(
                 user_id=user.id,
                 thread_id=thread_id,
