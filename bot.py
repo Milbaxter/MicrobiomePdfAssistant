@@ -115,6 +115,8 @@ class BiomeBot:
             pdf_bytes = await attachment.read()
             
             # Handle different channel types for thread creation
+            print(f"🔧 Processing PDF in channel: {message.channel.name if hasattr(message.channel, 'name') else 'DM'} (type: {type(message.channel)})")
+            
             if isinstance(message.channel, discord.DMChannel):
                 # For DMs, check if there's already a report for this user in this DM
                 existing_dm_report = db.query(Report).filter(
@@ -135,8 +137,26 @@ class BiomeBot:
                 thread = message.channel
                 await message.reply("📊 Analyzing your microbiome report...")
                 
+            elif isinstance(message.channel, discord.Thread):
+                # User uploaded PDF to an existing thread - replace the existing report
+                print(f"🔧 PDF uploaded to existing thread: {message.channel.name} (ID: {message.channel.id})")
+                
+                # Check if there's already a report for this thread
+                existing_thread_report = db.query(Report).filter(Report.thread_id == message.channel.id).first()
+                
+                if existing_thread_report:
+                    # Delete existing thread report and all related data to allow new upload
+                    print(f"🔄 Deleting existing report for thread {message.channel.id}")
+                    db.query(ReportChunk).filter(ReportChunk.report_id == existing_thread_report.id).delete()
+                    db.query(Message).filter(Message.report_id == existing_thread_report.id).delete()
+                    db.delete(existing_thread_report)
+                    db.commit()
+                
+                thread = message.channel
+                await message.reply("📊 Analyzing your new microbiome report...")
+                
             elif hasattr(message.channel, 'create_thread') and isinstance(message.channel, (discord.TextChannel, discord.ForumChannel)):
-                # Always create a new thread for each upload in guild channels
+                # Create a new thread for upload in guild text channels
                 timestamp = datetime.now().strftime("%H:%M")
                 print(f"🔧 Attempting to create thread in channel: {message.channel.name} (type: {type(message.channel)})")
                 try:
