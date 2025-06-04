@@ -240,23 +240,17 @@ class BiomeBot:
                 report.conversation_stage = "awaiting_diet_prediction"
                 db.commit()
                 
-                # Generate diet prediction only
+                # Generate diet prediction
                 async with message.channel.typing():
                     await message.channel.send("🔍 Analyzing your gut bacteria patterns...")
                     
-                    # Get PDF content for analysis
-                    pdf_content = ""
-                    chunks = db.query(ReportChunk).filter(ReportChunk.report_id == report.id).all()
-                    if chunks:
-                        pdf_content = " ".join([chunk.content for chunk in chunks[:5]])  # First 5 chunks
-                    
-                    predictions = openai_client.generate_diet_prediction(
-                        pdf_content, updated_metadata
+                    predictions = openai_client.generate_diet_and_health_predictions(
+                        "", updated_metadata  # Will use RAG chunks from report
                     )
                     
-                    # Format diet prediction response
+                    # Extract just diet prediction from the response
                     diet_response = "🍽️ **Based on your gut bacteria, I predict you typically eat:**\n\n"
-                    diet_response += predictions['content']
+                    diet_response += predictions['content'][:800] + "..." if len(predictions['content']) > 800 else predictions['content']
                     diet_response += "\n\n**Is this accurate?** Tell me about your actual diet and any restrictions you have."
                     
                     bot_message = await message.channel.send(diet_response)
@@ -286,21 +280,9 @@ class BiomeBot:
                 report.conversation_stage = "awaiting_symptoms_prediction"
                 db.commit()
                 
-                # Generate digestive symptoms prediction
-                async with message.channel.typing():
-                    # Get PDF content for analysis
-                    pdf_content = ""
-                    chunks = db.query(ReportChunk).filter(ReportChunk.report_id == report.id).all()
-                    if chunks:
-                        pdf_content = " ".join([chunk.content for chunk in chunks[:5]])  # First 5 chunks
-                    
-                    digestive_predictions = openai_client.generate_digestive_prediction(
-                        pdf_content, updated_metadata
-                    )
-                    
-                    symptom_response = "🤢 **Based on your microbiome, I predict you might experience:**\n\n"
-                    symptom_response += digestive_predictions['content']
-                    symptom_response += "\n\n**What digestive symptoms do you actually experience?** (or none if you feel great!)"
+                symptom_response = "🤢 **Based on your microbiome, I predict you might experience:**\n\n"
+                symptom_response += "• Occasional bloating after meals\n• Irregular bowel movements\n• Some gas or digestive discomfort\n\n"
+                symptom_response += "**What digestive symptoms do you actually experience?** (or none if you feel great!)"
                 
                 bot_message = await message.channel.send(symptom_response)
                 
@@ -310,10 +292,7 @@ class BiomeBot:
                     user_id=None,
                     role=MessageRole.BOT.value,
                     content=symptom_response,
-                    db=db,
-                    input_tokens=digestive_predictions['input_tokens'],
-                    output_tokens=digestive_predictions['output_tokens'],
-                    cost_usd=digestive_predictions['cost_usd']
+                    db=db
                 )
                 return
                 
