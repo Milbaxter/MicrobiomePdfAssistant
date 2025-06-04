@@ -75,17 +75,18 @@ Your response should:
 Keep it concise and conversational. Reference specific bacteria from their report that indicate certain dietary patterns."""
             
         elif any(keyword in recent_content for keyword in ["diet", "allergy", "eating", "food"]) and len([msg for msg in last_messages if msg.get("role") == "user"]) >= 2:
-            # Check if this is energy/digestive prediction stage (right after diet confirmation)
+            # Analyze the last few messages to determine stage
             user_messages = [msg for msg in last_messages if msg.get("role") == "user"]
             bot_messages = [msg for msg in last_messages if msg.get("role") == "bot"]
             
-            # Look for recent diet-related user response that doesn't mention energy/digestive issues
-            recent_user_content = " ".join([msg["content"].lower() for msg in user_messages[-2:]])
-            recent_bot_content = " ".join([msg["content"].lower() for msg in bot_messages[-2:]])
+            # Check if the last bot message was asking about diet
+            last_bot_message = bot_messages[-1]["content"].lower() if bot_messages else ""
+            last_user_message = user_messages[-1]["content"].lower() if user_messages else ""
             
-            if (any(diet_word in recent_user_content for diet_word in ["diet", "eating", "food", "allergy"]) and 
-                not any(energy_word in recent_user_content for energy_word in ["energy", "digestive", "bloating", "tired"]) and
-                not any(energy_word in recent_bot_content for energy_word in ["energy", "digestive", "bloating"])):
+            # If bot asked about diet and user just responded about diet (without energy/digestive mentions)
+            if ("does this match your actual diet" in last_bot_message and 
+                not any(energy_word in last_user_message for energy_word in ["energy", "digestive", "bloating", "tired", "fatigue"]) and
+                not any(energy_word in last_bot_message for energy_word in ["energy", "digestive", "bloating"])):
                 
                 # Energy/digestive prediction stage
                 system_prompt = """You are BiomeAI, an expert microbiome analyst.
@@ -100,7 +101,7 @@ Your response should:
 
 Keep it focused and reference specific bacteria from their report."""
                 
-            else:
+            elif any(energy_word in last_user_message for energy_word in ["energy", "digestive", "bloating", "tired", "fatigue"]):
                 # Executive summary stage (after energy/digestive confirmation)
                 system_prompt = """You are BiomeAI, an expert microbiome analyst.
 
@@ -115,6 +116,20 @@ Then provide a comprehensive summary covering:
 - Overall gut health assessment
 
 Keep it focused and informative. DO NOT include recommendations in this message - that comes separately next."""
+            
+            else:
+                # Energy/digestive prediction stage (fallback for diet confirmation)
+                system_prompt = """You are BiomeAI, an expert microbiome analyst.
+
+Your task: Based on the microbiome report and confirmed diet, predict the user's energy levels and digestive issues.
+
+Your response should:
+1. Analyze the microbial patterns to predict their likely energy state (high energy, low energy, energy crashes, etc.)
+2. Predict likely digestive issues based on their microbiome (bloating, gas, irregular bowel movements, etc.)
+3. Be specific about what the bacteria in their report suggest about these symptoms
+4. End with: "Is this accurate? Please describe any digestive issues you experience and your typical energy levels throughout the day."
+
+Keep it focused and reference specific bacteria from their report."""
             
         else:
             # General Q&A stage
