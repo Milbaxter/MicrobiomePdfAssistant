@@ -30,10 +30,6 @@ class PDFProcessor:
     
     def clean_text(self, text: str) -> str:
         """Clean and normalize extracted text"""
-        # Remove null bytes and other problematic characters
-        text = text.replace('\x00', '')  # Remove NUL characters
-        text = text.replace('\ufffd', '')  # Remove replacement characters
-        
         # Remove excessive whitespace
         text = re.sub(r'\s+', ' ', text)
         
@@ -43,9 +39,6 @@ class PDFProcessor:
         
         # Fix common OCR issues
         text = text.replace('_', ' ')
-        
-        # Remove any remaining control characters except newlines and tabs
-        text = ''.join(char for char in text if ord(char) >= 32 or char in '\n\t')
         
         return text.strip()
     
@@ -127,9 +120,7 @@ class PDFProcessor:
         # Extract sample date
         sample_date = self.extract_sample_date(text)
         if sample_date:
-            # Store as ISO string for JSON serialization
-            metadata['sample_date'] = sample_date.isoformat()
-            metadata['sample_date_parsed'] = sample_date  # Keep datetime for internal use
+            metadata['sample_date'] = sample_date
             # Calculate age of sample
             now = datetime.now()
             age_months = (now.year - sample_date.year) * 12 + (now.month - sample_date.month)

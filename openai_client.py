@@ -66,7 +66,6 @@ Key principles:
 - Give actionable recommendations when appropriate
 - Reference specific findings from their report when possible
 - Keep responses conversational but informative
-- IMPORTANT: Keep all responses under 1800 characters - be concise and to the point
 
 When analyzing reports:
 1. First establish context (report date, any lifestyle factors)
@@ -74,7 +73,7 @@ When analyzing reports:
 3. Suggest actionable next steps
 4. Be ready to answer specific questions about their results
 
-Remember: You're analyzing real medical data, so be accurate and suggest consulting healthcare providers for medical decisions. Always keep responses brief and focused."""
+Remember: You're analyzing real medical data, so be accurate and suggest consulting healthcare providers for medical decisions."""
 
         # Prepare messages
         messages = [{"role": "system", "content": system_prompt}]
@@ -87,10 +86,8 @@ Remember: You're analyzing real medical data, so be accurate and suggest consult
         
         # Add conversation history
         for msg in conversation_history:
-            # Convert 'bot' role to 'assistant' for OpenAI API
-            role = "assistant" if msg["role"] == "bot" else msg["role"]
             messages.append({
-                "role": role,
+                "role": msg["role"],
                 "content": msg["content"]
             })
         
@@ -122,11 +119,6 @@ Remember: You're analyzing real medical data, so be accurate and suggest consult
             
             # Extract response data
             content = response.choices[0].message.content
-            
-            # Truncate content to Discord's 2000 character limit
-            if content and len(content) > 1950:  # Leave some buffer
-                content = content[:1947] + "..."
-            
             input_tokens = response.usage.prompt_tokens
             output_tokens = response.usage.completion_tokens
             cost = self.calculate_chat_cost(input_tokens, output_tokens)
@@ -140,100 +132,6 @@ Remember: You're analyzing real medical data, so be accurate and suggest consult
             
         except Exception as e:
             print(f"Error in OpenAI chat completion: {e}")
-            raise
-
-    def generate_diet_prediction(self, pdf_content: str, user_metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate diet prediction only based on microbiome report"""
-        
-        prompt = f"""Based on this microbiome report, analyze the bacterial composition and predict what this person typically eats.
-
-Look at bacterial ratios like:
-- Bacteroidetes vs Firmicutes (plant vs animal diet)
-- Prevotella (fiber/carbs)
-- Akkermansia (healthy fiber)
-- Other dietary indicator bacteria
-
-Make ONE specific prediction about their typical diet patterns (plant-heavy, meat-heavy, processed foods, fiber intake, etc.).
-
-Microbiome Report Content:
-{pdf_content[:3000]}
-
-Sample Age: {user_metadata.get('sample_age_months', 'unknown')} months old
-
-Keep response under 500 characters. Be specific but note this is an educated guess."""
-
-        try:
-            response = self.client.chat.completions.create(
-                model=CHAT_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=200,
-                temperature=0.7
-            )
-            
-            content = response.choices[0].message.content
-            if content and len(content) > 500:
-                content = content[:497] + "..."
-            
-            input_tokens = response.usage.prompt_tokens
-            output_tokens = response.usage.completion_tokens
-            cost = self.calculate_chat_cost(input_tokens, output_tokens)
-            
-            return {
-                "content": content,
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "cost_usd": cost
-            }
-            
-        except Exception as e:
-            print(f"Error generating diet prediction: {e}")
-            raise
-
-    def generate_digestive_prediction(self, pdf_content: str, user_metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate digestive symptoms prediction based on microbiome report"""
-        
-        prompt = f"""Based on this microbiome report and user's dietary patterns, predict what digestive symptoms they might experience.
-
-Look for:
-- Bacterial imbalances that cause bloating
-- Low diversity causing irregularity
-- Inflammatory bacteria causing discomfort
-- Missing beneficial bacteria
-
-User's diet response: {user_metadata.get('diet_response', 'Not provided')}
-
-Microbiome Report Content:
-{pdf_content[:2000]}
-
-Make ONE specific prediction about digestive symptoms they likely experience (bloating, irregularity, gas, etc.) or if their gut looks healthy.
-
-Keep under 300 characters. Be specific but note this is an educated guess."""
-
-        try:
-            response = self.client.chat.completions.create(
-                model=CHAT_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=150,
-                temperature=0.7
-            )
-            
-            content = response.choices[0].message.content
-            if content and len(content) > 300:
-                content = content[:297] + "..."
-            
-            input_tokens = response.usage.prompt_tokens
-            output_tokens = response.usage.completion_tokens
-            cost = self.calculate_chat_cost(input_tokens, output_tokens)
-            
-            return {
-                "content": content,
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "cost_usd": cost
-            }
-            
-        except Exception as e:
-            print(f"Error generating digestive prediction: {e}")
             raise
 
     def generate_executive_summary(self, pdf_content: str, user_metadata: Dict[str, Any]) -> Dict[str, Any]:

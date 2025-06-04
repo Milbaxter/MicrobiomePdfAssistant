@@ -114,116 +114,31 @@ class BiomeBot:
             # Download PDF
             pdf_bytes = await attachment.read()
             
-            # Handle different channel types for thread creation
-            print(f"🔧 Processing PDF in channel: {message.channel.name if hasattr(message.channel, 'name') else 'DM'} (type: {type(message.channel)})")
-            
-            if isinstance(message.channel, discord.DMChannel):
-                # For DMs, check if there's already a report for this user in this DM
-                existing_dm_report = db.query(Report).filter(
-                    Report.thread_id == message.channel.id,
-                    Report.user_id == user.id
-                ).first()
-                
-                if existing_dm_report:
-                    # Delete existing DM report and all related data to allow new upload
-                    # First delete related chunks and messages
-                    db.query(ReportChunk).filter(ReportChunk.report_id == existing_dm_report.id).delete()
-                    db.query(Message).filter(Message.report_id == existing_dm_report.id).delete()
-                    # Then delete the report
-                    db.delete(existing_dm_report)
-                    db.commit()
-                    print(f"🔄 Deleted existing DM report for user {user.id}")
-                
-                thread = message.channel
-                await message.reply("📊 Analyzing your microbiome report...")
-                
-            elif isinstance(message.channel, discord.Thread):
-                # User uploaded PDF to an existing thread - replace the existing report
-                print(f"🔧 PDF uploaded to existing thread: {message.channel.name} (ID: {message.channel.id})")
-                
-                # Check if there's already a report for this thread
-                existing_thread_report = db.query(Report).filter(Report.thread_id == message.channel.id).first()
-                
-                if existing_thread_report:
-                    # Delete existing thread report and all related data to allow new upload
-                    print(f"🔄 Deleting existing report for thread {message.channel.id}")
-                    db.query(ReportChunk).filter(ReportChunk.report_id == existing_thread_report.id).delete()
-                    db.query(Message).filter(Message.report_id == existing_thread_report.id).delete()
-                    db.delete(existing_thread_report)
-                    db.commit()
-                
-                thread = message.channel
-                await message.reply("📊 Analyzing your new microbiome report...")
-                
-            elif isinstance(message.channel, (discord.TextChannel, discord.ForumChannel)):
-                # Create a new thread for upload in guild text channels
-                timestamp = datetime.now().strftime("%H:%M")
-                print(f"🔧 Attempting to create thread in channel: {message.channel.name} (type: {type(message.channel)})")
-                try:
-                    thread = await message.create_thread(
-                        name=f"🧬 {attachment.filename} - {message.author.display_name} ({timestamp})",
-                        auto_archive_duration=10080  # 7 days
-                    )
-                    print(f"✅ Thread created successfully: {thread.name} (ID: {thread.id})")
-                    await thread.send("📊 Analyzing your microbiome report...")
-                except discord.HTTPException as e:
-                    # If thread creation fails, fall back to replying in channel
-                    print(f"❌ Thread creation failed: {e}")
-                    thread = message.channel
-                    await message.reply("📊 Analyzing your microbiome report...")
-            elif hasattr(message.channel, 'create_thread'):
-                # Handle other channel types that support threads
-                timestamp = datetime.now().strftime("%H:%M")
-                print(f"🔧 Attempting to create thread in channel: {message.channel.name if hasattr(message.channel, 'name') else 'Unknown'} (type: {type(message.channel)})")
-                try:
-                    thread = await message.create_thread(
-                        name=f"🧬 {attachment.filename} - {message.author.display_name} ({timestamp})",
-                        auto_archive_duration=10080  # 7 days
-                    )
-                    print(f"✅ Thread created successfully: {thread.name} (ID: {thread.id})")
-                    await thread.send("📊 Analyzing your microbiome report...")
-                except discord.HTTPException as e:
-                    # If thread creation fails, fall back to replying in channel
-                    print(f"❌ Thread creation failed: {e}")
-                    thread = message.channel
-                    await message.reply("📊 Analyzing your microbiome report...")
-            else:
-                # Fallback: reply in the same channel
-                print(f"⚠️ Channel type {type(message.channel)} doesn't support threads, replying in channel")
-                thread = message.channel
-                await message.reply("📊 Analyzing your microbiome report...")
+            # Create thread for this report
+            thread = await message.create_thread(
+                name=f"🧬 {attachment.filename} - {message.author.display_name}",
+                auto_archive_duration=10080  # 7 days
+            )
             
             # Process PDF
-            await asyncio.sleep(1)  # Brief pause to show processing
+            await thread.send("📊 Analyzing your microbiome report...")
+            
             processed_data = pdf_processor.process_pdf(pdf_bytes)
             
-            # Prepare metadata for JSON storage
-            metadata_for_db = processed_data['metadata'].copy()
-            
-            # Extract sample_date_parsed for the database field
-            sample_date = metadata_for_db.pop('sample_date_parsed', None)
-            
-            # Use the appropriate channel ID for thread_id
-            thread_id = thread.id
-            
-            # Create new report record
+            # Create report record
             report = Report(
                 user_id=user.id,
-                thread_id=thread_id,
+                thread_id=thread.id,
                 original_filename=attachment.filename,
-                sample_date=sample_date,
-                report_metadata=metadata_for_db,
-                conversation_stage="awaiting_antibiotics"
+                sample_date=processed_data['metadata'].get('sample_date'),
+                report_metadata=processed_data['metadata']
             )
             db.add(report)
             db.commit()
             db.refresh(report)
             
             # Create chunks and embeddings
-            if isinstance(thread, discord.Thread):
-                await thread.send("🔬 Creating knowledge base from your report...")
-            else:
-                await thread.send("🔬 Creating knowledge base from your report...")
+            await thread.send("🔬 Creating knowledge base from your report...")
             
             for chunk_data in processed_data['chunks']:
                 try:
@@ -236,12 +151,12 @@ class BiomeBot:
                         content=chunk_data['content']
                     )
                     
-                    # Set embedding if available
+                    # Set embedding based on available method
                     try:
                         chunk.embedding = embedding
                     except AttributeError:
-                        # pgvector might not be available
-                        pass
+                        # Fallback to array storage
+                        chunk.embedding_array = embedding
                     
                     db.add(chunk)
                     
@@ -251,14 +166,17 @@ class BiomeBot:
             
             db.commit()
             
-            # Start with date confirmation first
-            if sample_date:
+            # Initial analysis based on extracted date
+            if processed_data['metadata'].get('sample_date'):
+                sample_date = processed_data['metadata']['sample_date']
                 age_months = processed_data['metadata'].get('sample_age_months', 0)
+                
                 date_response = f"📅 I see your microbiome report was generated on **{sample_date.strftime('%B %d, %Y')}**\n"
                 date_response += f"That's roughly **{age_months} months** ago. Gut profiles can shift fast, so I'll keep that in mind.\n\n"
-                date_response += "Did you take any antibiotics around the time of the test?"
             else:
-                date_response = "📅 Looks like the report date is missing.\nWhen did you take this test? (Month & year is enough.)"
+                date_response = "Looks like the report date is missing.\nWhen did you take this test? (Month & year is enough.)\n\n"
+            
+            date_response += "Did you take any antibiotics around the time of the test?"
             
             # Send initial response
             bot_message = await thread.send(date_response)
@@ -290,11 +208,11 @@ class BiomeBot:
     
     async def handle_thread_message(self, message: discord.Message, db: Session):
         """Handle message in an existing thread"""
-        # Find report by thread ID (or channel ID for DMs)
+        # Find report by thread ID
         report = db.query(Report).filter(Report.thread_id == message.channel.id).first()
         
         if not report:
-            return  # Not a report thread/channel
+            return  # Not a report thread
         
         user = await self.ensure_user_exists(message.author, db)
         
@@ -308,126 +226,6 @@ class BiomeBot:
             db=db
         )
         
-        # Handle step-by-step conversation flow
-        if report.conversation_stage == "awaiting_antibiotics":
-            # Store antibiotic response and move to diet prediction
-            try:
-                updated_metadata = report.report_metadata.copy() if report.report_metadata else {}
-                updated_metadata['antibiotics_response'] = message.content
-                report.report_metadata = updated_metadata
-                report.conversation_stage = "awaiting_diet_prediction"
-                db.commit()
-                
-                # Generate diet prediction
-                async with message.channel.typing():
-                    await message.channel.send("🔍 Analyzing your gut bacteria patterns...")
-                    
-                    predictions = openai_client.generate_diet_prediction(
-                        "", updated_metadata  # Will use RAG chunks from report
-                    )
-                    
-                    # Extract just diet prediction from the response
-                    diet_response = "🍽️ **Based on your gut bacteria, I predict you typically eat:**\n\n"
-                    diet_response += predictions['content'][:800] + "..." if len(predictions['content']) > 800 else predictions['content']
-                    diet_response += "\n\n**Is this accurate?** Tell me about your actual diet and any restrictions you have."
-                    
-                    bot_message = await message.channel.send(diet_response)
-                    
-                    await self.save_message(
-                        message_id=bot_message.id,
-                        report_id=report.id,
-                        user_id=None,
-                        role=MessageRole.BOT.value,
-                        content=diet_response,
-                        db=db,
-                        input_tokens=predictions['input_tokens'],
-                        output_tokens=predictions['output_tokens'],
-                        cost_usd=predictions['cost_usd']
-                    )
-                    return
-                    
-            except Exception as e:
-                print(f"Error in diet prediction stage: {e}")
-        
-        elif report.conversation_stage == "awaiting_diet_prediction":
-            # Store diet response and move to digestive symptoms
-            try:
-                updated_metadata = report.report_metadata.copy() if report.report_metadata else {}
-                updated_metadata['diet_response'] = message.content
-                report.report_metadata = updated_metadata
-                report.conversation_stage = "awaiting_symptoms_prediction"
-                db.commit()
-                
-                symptom_response = "🤢 **Based on your microbiome, I predict you might experience:**\n\n"
-                symptom_response += "• Occasional bloating after meals\n• Irregular bowel movements\n• Some gas or digestive discomfort\n\n"
-                symptom_response += "**What digestive symptoms do you actually experience?** (or none if you feel great!)"
-                
-                bot_message = await message.channel.send(symptom_response)
-                
-                await self.save_message(
-                    message_id=bot_message.id,
-                    report_id=report.id,
-                    user_id=None,
-                    role=MessageRole.BOT.value,
-                    content=symptom_response,
-                    db=db
-                )
-                return
-                
-            except Exception as e:
-                print(f"Error in symptoms prediction stage: {e}")
-        
-        elif report.conversation_stage == "awaiting_symptoms_prediction":
-            # Store symptoms response and generate executive summary
-            try:
-                updated_metadata = report.report_metadata.copy() if report.report_metadata else {}
-                updated_metadata['symptoms_response'] = message.content
-                report.report_metadata = updated_metadata
-                report.conversation_stage = "executive_summary_ready"
-                db.commit()
-                
-                # Generate executive summary with all collected information
-                async with message.channel.typing():
-                    await message.channel.send("✨ Perfect! Now creating your personalized executive summary...")
-                    
-                    summary_data = openai_client.generate_executive_summary(
-                        "",  # Will use conversation history and RAG
-                        updated_metadata
-                    )
-                    
-                    summary_message = await message.channel.send(f"🧬 **EXECUTIVE SUMMARY**\n\n{summary_data['content']}")
-                    
-                    await self.save_message(
-                        message_id=summary_message.id,
-                        report_id=report.id,
-                        user_id=None,
-                        role=MessageRole.BOT.value,
-                        content=f"🧬 **EXECUTIVE SUMMARY**\n\n{summary_data['content']}",
-                        db=db,
-                        input_tokens=summary_data['input_tokens'],
-                        output_tokens=summary_data['output_tokens'],
-                        cost_usd=summary_data['cost_usd']
-                    )
-                    
-                    followup = await message.channel.send("🎯 **Ready for your questions!** Ask me anything about your microbiome results.")
-                    
-                    await self.save_message(
-                        message_id=followup.id,
-                        report_id=report.id,
-                        user_id=None,
-                        role=MessageRole.BOT.value,
-                        content="🎯 **Ready for your questions!** Ask me anything about your microbiome results.",
-                        db=db
-                    )
-                    
-                    print(f"💬 Generated executive summary for user {user.username} in report {report.id}")
-                    return
-                    
-            except Exception as e:
-                print(f"Error generating executive summary: {e}")
-                # Fall through to regular response handling
-        
-        # Regular conversation handling
         # Get conversation history
         conversation_history = await self.get_thread_conversation_history(report.id, db)
         
@@ -444,7 +242,7 @@ class BiomeBot:
                 )
             
             # Send response
-            bot_message = await message.channel.send(response_data['content'])
+            bot_message = await message.reply(response_data['content'])
             
             # Save bot message with cost tracking
             chunk_ids = []  # Would need to track which chunks were used
@@ -481,10 +279,6 @@ async def on_message(message: discord.Message):
     if message.author.bot:
         return
     
-    # Ensure we have a bot user (should be available after on_ready)
-    if not bot.user:
-        return
-    
     db = SessionLocal()
     try:
         # Handle PDF uploads (when bot is mentioned)
@@ -507,28 +301,9 @@ async def on_message(message: discord.Message):
             await message.reply("Greetings! 🧬 Upload a microbiome report and we can get started!")
             return
         
-        # Handle messages in report threads or DMs (only when mentioned, replied to, or in DMs)
-        elif isinstance(message.channel, (discord.Thread, discord.DMChannel)):
-            # Check if bot should respond
-            should_respond = False
-            
-            # Always respond in DMs
-            if isinstance(message.channel, discord.DMChannel):
-                should_respond = True
-            # In threads, only respond when mentioned or when replying to bot
-            elif bot.user.mentioned_in(message):
-                should_respond = True
-            elif message.reference and message.reference.message_id:
-                # Check if user is replying to bot's message
-                try:
-                    referenced_message = await message.channel.fetch_message(message.reference.message_id)
-                    if referenced_message.author == bot.user:
-                        should_respond = True
-                except:
-                    pass
-            
-            if should_respond:
-                await biome_bot.handle_thread_message(message, db)
+        # Handle messages in report threads
+        elif isinstance(message.channel, discord.Thread):
+            await biome_bot.handle_thread_message(message, db)
     
     except Exception as e:
         print(f"Error handling message: {e}")
@@ -554,21 +329,23 @@ async def stats_command(ctx):
         embed.add_field(name="💰 Total Cost", value=f"${total_cost:.4f}", inline=True)
         
         await ctx.send(embed=embed)
+    
+    except Exception as e:
+        await ctx.send(f"❌ Error getting stats: {e}")
     finally:
         db.close()
 
 @bot.command(name='health')
 async def health_command(ctx):
     """Health check command"""
-    await ctx.send("✅ BiomeAI is healthy and operational!")
+    await ctx.send("✅ BiomeAI is healthy and ready to analyze microbiome reports!")
 
 def run_bot():
     """Run the Discord bot"""
-    try:
-        bot.run(DISCORD_TOKEN)
-    except Exception as e:
-        print(f"❌ Failed to start bot: {e}")
-        raise
+    if not DISCORD_TOKEN:
+        raise ValueError("DISCORD_TOKEN not found in environment variables")
+    
+    bot.run(DISCORD_TOKEN)
 
 if __name__ == "__main__":
     run_bot()
