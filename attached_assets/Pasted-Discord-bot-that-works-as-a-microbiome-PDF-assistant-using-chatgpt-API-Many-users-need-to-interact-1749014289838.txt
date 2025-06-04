@@ -1,0 +1,108 @@
+Discord bot that works as a microbiome PDF assistant using chatgpt API.
+
+Many users need to interact with the bot at the same time. We need a DB PostgresdSQL natively with replit. 
+
+We will store each PDF as one reply because user start by uploading a pdf and then by replying to the bot and concequent answerrs a tree of replies will appear - one or many per pdf.
+
+Example: 
+
+User: Hi @biomeAI
+BiomeAI: Greetings, upload a microbiome report and we can get started!
+User: uploads biome.pdf
+BiomeAI: analyzing...
+BiomeAI: 1 ·  PDF Handling Prompts
+
+1.1  Auto-date found
+
+📅 I see your microbiome report was generated on **{sample_date}**  
+That’s roughly **{age_in_months} months** ago. Gut profiles can shift fast, so I’ll keep that in mind.
+
+1.2  Date missing
+
+Looks like the report date is missing.  
+When did you take this test? (Month & year is enough.)
+
+User: Test was taken xx.xx
+
+BiomeAI: Did you take any antibiotics at the time around the test?
+User: No
+BiomeAI: Do you have any allergies or limiting diet?
+User: yes im vegan
+BiomeAI: okay now before I give your executive summary, if you want to add your height, weight, age and sex this will make your analysis more exact. This is optional tho.
+User: My height is 190cm and weight 80k. prefer not to say rest.
+BiomeAI: analyzing...
+BiomeAI: Executive Summary [combining insights from microbiome report and lifestyle info]
+BiomeAI: Call to action: [some impactful lifestyle change the user could think about]
+User: Question1
+BiomeAI: answer1
+User2: question2:
+BiomeAI: answer2
+.... etc then users can keep replying and asking questions about that specific report.
+
+We need to create a RAG when user uploads their microbiome report because they can be long (50+ pages). Then check this RAG for relevant chunks to use in context when answering user queries.
+
+Discord “BiomeAI” microbiome-PDF assistant — Postgres schema & flow
+
+Core idea
+Each uploaded microbiome PDF becomes its own Discord thread (“report”).
+We chunk & embed the PDF (RAG with pgvector); all user/bot messages in that thread are stored for context + token cost tracking.
+
+Tables (minimal fields)
+Table	Key fields	Notes
+users	id BIGINT PK (Discord user_id), username	One row per Discord member
+reports	id SERIAL PK, user_id FK, thread_id BIGINT, sample_date, metadata JSONB	One row per PDF/upload/thread
+report_chunks	id SERIAL PK, report_id FK, chunk_idx INT, content TEXT, embedding VECTOR(1536)	RAG chunks; ivfflat index on embedding
+messages	id BIGINT PK (Discord message_id), report_id FK, user_id FK NULL, role ENUM('user','bot'), content, token & cost columns, retrieved_chunk_ids INT[]	Every turn (both sides)
+
+Extensions / indexes
+sql
+Copy
+Edit
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- ANN search
+CREATE INDEX report_chunks_embedding_idx
+ON report_chunks USING ivfflat (embedding vector_cosine_ops)
+WITH (lists = 100);
+
+CREATE INDEX messages_report_created_idx
+ON messages (report_id, created_at);
+Workflow
+Upload PDF → insert into reports, spawn Discord thread.
+
+Chunk + embed → insert into report_chunks.
+
+For each question/answer turn:
+
+Retrieve top-k chunks via pgvector ANN.
+
+Save user message row.
+
+Call OpenAI; save bot reply row with token counts & cost_usd.
+
+Optional analytics: sum cost_usd per day.
+
+Extras / options
+If pgvector unavailable, store embedding FLOAT8[] and brute-force.
+
+Token & cost columns give per-report billing.
+
+Add GDPR deletion later with deleted_at.
+
+PDF bytes don’t live in DB; only text chunks are stored.
+
+That’s the gist — enough for an agent to scaffold the schema, enable pgvector, and wire the bot.
+
+
+
+
+
+
+
+
+
+
+
+Tools
+
+
