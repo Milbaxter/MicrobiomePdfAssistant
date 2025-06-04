@@ -86,8 +86,10 @@ Remember: You're analyzing real medical data, so be accurate and suggest consult
         
         # Add conversation history
         for msg in conversation_history:
+            # Convert 'bot' role to 'assistant' for OpenAI API
+            role = "assistant" if msg["role"] == "bot" else msg["role"]
             messages.append({
-                "role": msg["role"],
+                "role": role,
                 "content": msg["content"]
             })
         
