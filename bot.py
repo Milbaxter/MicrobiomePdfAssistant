@@ -114,35 +114,40 @@ class BiomeBot:
             # Download PDF first
             pdf_bytes = await attachment.read()
             
-            # Try to create thread, handle if one already exists
+            # Check if this thread already has a report in database
+            existing_report = db.query(Report).filter(Report.thread_id == thread.id).first() if hasattr(thread, 'id') else None
+            
+            # Create unique thread name with counter if needed
+            base_name = f"🧬 {attachment.filename} - {message.author.display_name}"
+            thread_name = base_name
+            counter = 1
+            
+            # If we're reusing an existing thread or need a new one
             thread = None
             try:
                 thread = await message.create_thread(
-                    name=f"🧬 {attachment.filename} - {message.author.display_name}",
+                    name=thread_name,
                     auto_archive_duration=10080  # 7 days
                 )
             except discord.HTTPException as e:
                 if e.code == 160004:  # Thread already exists for this message
-                    # Find the existing thread
-                    if hasattr(message, 'thread') and message.thread:
-                        thread = message.thread
-                    else:
-                        # Search for the thread in the guild
-                        for guild_thread in message.guild.threads:
-                            if guild_thread.owner_id == message.author.id:
-                                # Check if this thread was created from this message
-                                async for msg in guild_thread.history(limit=1, oldest_first=True):
-                                    if msg.reference and msg.reference.message_id == message.id:
-                                        thread = guild_thread
-                                        break
-                                if thread:
-                                    break
+                    # Create a new thread with incremented name
+                    while counter <= 10:  # Limit attempts
+                        try:
+                            thread_name = f"{base_name} #{counter}"
+                            # Create new message to attach thread to
+                            temp_msg = await message.channel.send(f"📊 Processing {attachment.filename} (Upload #{counter})")
+                            thread = await temp_msg.create_thread(
+                                name=thread_name,
+                                auto_archive_duration=10080
+                            )
+                            break
+                        except discord.HTTPException:
+                            counter += 1
                     
                     if not thread:
-                        await message.reply("❌ Thread creation failed. Please try uploading your PDF again.")
+                        await message.reply("❌ Unable to create thread after multiple attempts. Please try again.")
                         return
-                    
-                    await thread.send("📊 Processing additional PDF analysis...")
                 else:
                     raise e
             
@@ -200,10 +205,14 @@ class BiomeBot:
             
             # Initial analysis based on extracted date
             if processed_data['metadata'].get('sample_date'):
-                sample_date = processed_data['metadata']['sample_date']
+                sample_date_str = processed_data['metadata']['sample_date']
                 age_months = processed_data['metadata'].get('sample_age_months', 0)
                 
-                date_response = f"📅 I see your microbiome report was generated on **{sample_date.strftime('%B %d, %Y')}**\n"
+                # Convert ISO string to datetime for formatting
+                from datetime import datetime
+                sample_date_obj = datetime.fromisoformat(sample_date_str)
+                
+                date_response = f"📅 I see your microbiome report was generated on **{sample_date_obj.strftime('%B %d, %Y')}**\n"
                 date_response += f"That's roughly **{age_months} months** ago. Gut profiles can shift fast, so I'll keep that in mind.\n\n"
             else:
                 date_response = "Looks like the report date is missing.\nWhen did you take this test? (Month & year is enough.)\n\n"
