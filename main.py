@@ -12,7 +12,7 @@ from pathlib import Path
 # Add current directory to Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from database import init_database
+from database import init_database, reset_database
 from bot import run_bot
 from config import DISCORD_TOKEN, OPENAI_API_KEY, DATABASE_URL
 
@@ -45,13 +45,13 @@ def main():
     # Check environment
     check_environment()
     
-    # Initialize database
-    print("📊 Initializing database...")
+    # Reset database for fresh start
+    print("📊 Resetting database...")
     try:
-        init_database()
-        print("✅ Database initialized successfully")
+        reset_database()
+        print("✅ Database reset successfully")
     except Exception as e:
-        print(f"❌ Database initialization failed: {e}")
+        print(f"❌ Database reset failed: {e}")
         sys.exit(1)
     
     # Start bot

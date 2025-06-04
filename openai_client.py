@@ -84,10 +84,13 @@ Remember: You're analyzing real medical data, so be accurate and suggest consult
             context_message = f"Here are relevant sections from the user's microbiome report:\n\n{chunks_context}"
             messages.append({"role": "system", "content": context_message})
         
-        # Add conversation history
+        # Add conversation history (map 'bot' role to 'assistant' for OpenAI)
         for msg in conversation_history:
+            role = msg["role"]
+            if role == "bot":
+                role = "assistant"
             messages.append({
-                "role": msg["role"],
+                "role": role,
                 "content": msg["content"]
             })
         
