@@ -336,8 +336,62 @@ class BiomeBot:
                 chunk_ids=chunk_ids
             )
             
-            # Check if we need to automatically send follow-up messages
-            await self.check_and_send_followups(message, report, conversation_history, relevant_chunks, db)
+            # Check if this is an executive summary - send automatic follow-ups
+            if response_data['content'].lower().startswith('executive summary of microbiome report and lifestyle:'):
+                print(f"🎯 Executive summary detected! Sending automatic follow-ups...")
+                
+                import asyncio
+                await asyncio.sleep(2)
+                
+                # 1. Send actionable insight
+                try:
+                    insight_response = self.openai_client.create_microbiome_analysis(
+                        conversation_history=conversation_history,
+                        relevant_chunks=relevant_chunks,
+                        user_question="Generate one specific actionable insight based on their microbiome data and lifestyle."
+                    )
+                    
+                    insight_msg = await message.channel.send(f"**One actionable insight:** {insight_response['content']}")
+                    
+                    # Save insight message
+                    await self.save_message(
+                        message_id=insight_msg.id,
+                        report_id=report.id,
+                        user_id=None,
+                        role=MessageRole.BOT.value,
+                        content=f"**One actionable insight:** {insight_response['content']}",
+                        db=db,
+                        input_tokens=insight_response.get('input_tokens', 0),
+                        output_tokens=insight_response.get('output_tokens', 0),
+                        cost_usd=insight_response.get('cost_usd', 0.0)
+                    )
+                    print(f"✅ Sent actionable insight")
+                    
+                except Exception as e:
+                    print(f"❌ Error sending actionable insight: {e}")
+                
+                await asyncio.sleep(2)
+                
+                # 2. Send Q&A invitation
+                try:
+                    qa_msg = await message.channel.send("Feel free to ask any questions about your results! I'm here to help you understand your microbiome better.")
+                    
+                    # Save Q&A message
+                    await self.save_message(
+                        message_id=qa_msg.id,
+                        report_id=report.id,
+                        user_id=None,
+                        role=MessageRole.BOT.value,
+                        content="Feel free to ask any questions about your results! I'm here to help you understand your microbiome better.",
+                        db=db
+                    )
+                    print(f"✅ Sent Q&A invitation")
+                    
+                except Exception as e:
+                    print(f"❌ Error sending Q&A invitation: {e}")
+            else:
+                # Check if we need to automatically send follow-up messages for other cases
+                await self.check_and_send_followups(message, report, conversation_history, relevant_chunks, db)
             
             print(f"💬 Responded to user {user.username} in report {report.id}")
             

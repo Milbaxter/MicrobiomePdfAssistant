@@ -111,7 +111,7 @@ Keep it short and to the point."""
                 
             # Check if user responded to digestive question (need executive summary)
             elif ("is this accurate" in recent_content and "digestive issues you experience" in recent_content) and user_question:
-                # Executive summary stage
+                # Executive summary stage - this will trigger automatic follow-ups
                 system_prompt = """You are BiomeAI, an expert microbiome analyst.
 
 Your task: Provide an executive summary combining the microbiome report with the user's confirmed diet, energy, and digestive information.
@@ -124,7 +124,7 @@ Then provide a comprehensive summary covering:
 - Integration of their energy levels and digestive symptoms
 - Overall gut health assessment
 
-Keep it focused and informative. DO NOT include recommendations in this message - that comes separately next."""
+Keep it focused and informative. This is the executive summary that will be followed by automated messages."""
                 
             else:
                 # General Q&A stage
