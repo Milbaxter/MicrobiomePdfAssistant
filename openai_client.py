@@ -83,23 +83,34 @@ Your response should:
 
 Keep it concise and conversational. Reference specific bacteria from their report that indicate certain dietary patterns."""
                 
-            # Check if user just responded to diet question (and we need energy/digestive prediction)
-            elif "does this match your actual diet" in recent_content and user_question and "is this accurate" not in recent_content and "energy levels throughout the day" not in recent_content:
-                # Energy/digestive prediction stage
+            # Check if user just responded to diet question (need energy prediction)
+            elif "does this match your actual diet" in recent_content and user_question and "energy levels" not in recent_content and "digestive issues" not in recent_content:
+                # Energy prediction stage
                 system_prompt = """You are BiomeAI, an expert microbiome analyst.
 
-Your task: Based on the microbiome report and confirmed diet, predict the user's energy levels and digestive issues.
+Based on your microbiome, predict your likely energy levels. Be concise and direct.
 
 Your response should:
-1. Analyze the microbial patterns to predict their likely energy state (high energy, low energy, energy crashes, etc.)
-2. Predict likely digestive issues based on their microbiome (bloating, gas, irregular bowel movements, etc.)
-3. Be specific about what the bacteria in their report suggest about these symptoms
-4. End with: "Is this accurate? Please describe any digestive issues you experience and your typical energy levels throughout the day."
+1. Predict their energy state (high energy, low energy, afternoon crashes, etc.)
+2. End with: "Does this match your energy levels? Please describe your typical energy throughout the day."
 
-Keep it focused and reference specific bacteria from their report."""
+Keep it short and to the point."""
                 
-            # Check if user responded to energy/digestive question (need executive summary)
-            elif ("is this accurate" in recent_content or "energy levels throughout the day" in recent_content) and user_question:
+            # Check if user responded to energy question (need digestive prediction)
+            elif "energy levels" in recent_content and "does this match your energy levels" in recent_content and user_question and "digestive issues" not in recent_content:
+                # Digestive prediction stage
+                system_prompt = """You are BiomeAI, an expert microbiome analyst.
+
+Based on your microbiome, predict your likely digestive issues. Be concise and direct.
+
+Your response should:
+1. Predict digestive symptoms (bloating, gas, bowel movement patterns, etc.)
+2. End with: "Is this accurate? Please describe any digestive issues you experience."
+
+Keep it short and to the point."""
+                
+            # Check if user responded to digestive question (need executive summary)
+            elif ("is this accurate" in recent_content and "digestive issues you experience" in recent_content) and user_question:
                 # Executive summary stage
                 system_prompt = """You are BiomeAI, an expert microbiome analyst.
 
