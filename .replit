@@ -26,3 +26,5 @@ args = "python -m pip install discord.py PyPDF2 python-dotenv sqlalchemy psycopg
 
 [deployment]
 run = ["sh", "-c", "python -m pip install discord.py PyPDF2 python-dotenv sqlalchemy psycopg2-binary pgvector && python main.py"]
+deploymentTarget = "gce"
+ignorePorts = true
