@@ -345,7 +345,7 @@ class BiomeBot:
                 
                 # 1. Send actionable insight
                 try:
-                    insight_response = self.openai_client.create_microbiome_analysis(
+                    insight_response = self.openai.create_microbiome_analysis(
                         conversation_history=conversation_history,
                         relevant_chunks=relevant_chunks,
                         user_question="Generate one specific actionable insight based on their microbiome data and lifestyle."
