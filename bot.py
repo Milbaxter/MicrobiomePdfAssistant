@@ -114,15 +114,12 @@ class BiomeBot:
             # Download PDF first
             pdf_bytes = await attachment.read()
             
-            # Check if this thread already has a report in database
-            existing_report = db.query(Report).filter(Report.thread_id == thread.id).first() if hasattr(thread, 'id') else None
-            
             # Create unique thread name with counter if needed
             base_name = f"🧬 {attachment.filename} - {message.author.display_name}"
             thread_name = base_name
             counter = 1
             
-            # If we're reusing an existing thread or need a new one
+            # Initialize thread variable
             thread = None
             try:
                 thread = await message.create_thread(
