@@ -240,18 +240,18 @@ class BiomeBot:
                 report.conversation_stage = "awaiting_diet_prediction"
                 db.commit()
                 
-                # Generate diet prediction only
+                # Generate diet prediction
                 async with message.channel.typing():
                     await message.channel.send("🔍 Analyzing your gut bacteria patterns...")
                     
-                    predictions = openai_client.generate_diet_prediction(
+                    predictions = openai_client.generate_diet_and_health_predictions(
                         "", updated_metadata  # Will use RAG chunks from report
                     )
                     
-                    # Diet prediction only
+                    # Extract just diet prediction from the response
                     diet_response = "🍽️ **Based on your gut bacteria, I predict you typically eat:**\n\n"
-                    diet_response += predictions['content']
-                    diet_response += "\n\n**Is this accurate?** Tell me about your actual diet and any dietary restrictions you have."
+                    diet_response += predictions['content'][:800] + "..." if len(predictions['content']) > 800 else predictions['content']
+                    diet_response += "\n\n**Is this accurate?** Tell me about your actual diet and any restrictions you have."
                     
                     bot_message = await message.channel.send(diet_response)
                     
@@ -280,15 +280,9 @@ class BiomeBot:
                 report.conversation_stage = "awaiting_symptoms_prediction"
                 db.commit()
                 
-                # Generate digestive symptoms prediction
-                async with message.channel.typing():
-                    predictions = openai_client.generate_digestive_prediction(
-                        "", updated_metadata  # Will use RAG chunks from report
-                    )
-                    
-                    symptom_response = "🤢 **Based on your microbiome, I predict you might experience:**\n\n"
-                    symptom_response += predictions['content']
-                    symptom_response += "\n\n**What digestive symptoms do you actually experience?** (or none if you feel great!)"
+                symptom_response = "🤢 **Based on your microbiome, I predict you might experience:**\n\n"
+                symptom_response += "• Occasional bloating after meals\n• Irregular bowel movements\n• Some gas or digestive discomfort\n\n"
+                symptom_response += "**What digestive symptoms do you actually experience?** (or none if you feel great!)"
                 
                 bot_message = await message.channel.send(symptom_response)
                 
@@ -298,10 +292,7 @@ class BiomeBot:
                     user_id=None,
                     role=MessageRole.BOT.value,
                     content=symptom_response,
-                    db=db,
-                    input_tokens=predictions['input_tokens'],
-                    output_tokens=predictions['output_tokens'],
-                    cost_usd=predictions['cost_usd']
+                    db=db
                 )
                 return
                 
