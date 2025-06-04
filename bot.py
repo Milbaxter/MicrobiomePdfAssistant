@@ -116,20 +116,39 @@ class BiomeBot:
             
             # Handle different channel types for thread creation
             if isinstance(message.channel, discord.DMChannel):
-                # For DMs, work directly in the DM channel
+                # For DMs, check if there's already a report for this user in this DM
+                existing_dm_report = db.query(Report).filter(
+                    Report.thread_id == message.channel.id,
+                    Report.user_id == user.id
+                ).first()
+                
+                if existing_dm_report:
+                    # Delete existing DM report and all related data to allow new upload
+                    # First delete related chunks and messages
+                    db.query(ReportChunk).filter(ReportChunk.report_id == existing_dm_report.id).delete()
+                    db.query(Message).filter(Message.report_id == existing_dm_report.id).delete()
+                    # Then delete the report
+                    db.delete(existing_dm_report)
+                    db.commit()
+                    print(f"🔄 Deleted existing DM report for user {user.id}")
+                
                 thread = message.channel
                 await message.reply("📊 Analyzing your microbiome report...")
+                
             elif hasattr(message.channel, 'create_thread') and isinstance(message.channel, (discord.TextChannel, discord.ForumChannel)):
-                # Create thread for guild text channels
+                # Always create a new thread for each upload in guild channels
+                timestamp = datetime.now().strftime("%H:%M")
+                print(f"🔧 Attempting to create thread in channel: {message.channel.name} (type: {type(message.channel)})")
                 try:
                     thread = await message.create_thread(
-                        name=f"🧬 {attachment.filename} - {message.author.display_name}",
+                        name=f"🧬 {attachment.filename} - {message.author.display_name} ({timestamp})",
                         auto_archive_duration=10080  # 7 days
                     )
+                    print(f"✅ Thread created successfully: {thread.name} (ID: {thread.id})")
                     await thread.send("📊 Analyzing your microbiome report...")
                 except discord.HTTPException as e:
                     # If thread creation fails, fall back to replying in channel
-                    print(f"Thread creation failed: {e}")
+                    print(f"❌ Thread creation failed: {e}")
                     thread = message.channel
                     await message.reply("📊 Analyzing your microbiome report...")
             else:
@@ -150,7 +169,7 @@ class BiomeBot:
             # Use the appropriate channel ID for thread_id
             thread_id = thread.id
             
-            # Create report record
+            # Create new report record
             report = Report(
                 user_id=user.id,
                 thread_id=thread_id,
