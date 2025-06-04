@@ -359,10 +359,12 @@ class BiomeBot:
             if len(bot_messages) >= 1:
                 last_bot_message = bot_messages[-1]['content'].lower()
                 
-                # Look for executive summary that starts with "executive summary"
-                if (last_bot_message.startswith('executive summary') and 
+                # Look for executive summary and check if we haven't sent follow-ups yet
+                if ('executive summary' in last_bot_message and 
                     'actionable insight' not in last_bot_message and 
                     'feel free to ask' not in last_bot_message):
+                    
+                    print(f"🎯 Detected executive summary, sending follow-ups...")
                     
                     # Send one actionable insight
                     await self.send_actionable_insight(message, report, conversation_history, relevant_chunks, db)

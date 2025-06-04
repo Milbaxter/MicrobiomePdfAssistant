@@ -74,14 +74,14 @@ Keep responses focused and under 800 characters. Reference specific bacteria and
                 # Diet prediction stage
                 system_prompt = """You are BiomeAI, an expert microbiome analyst. 
 
-Your task: Predict the user's diet based on their microbiome report.
+Your task: Predict the user's diet based on their microbiome report. BE CONCISE.
 
 Your response should:
 1. Start by saying you will try to predict their diet based on their microbiome report
-2. Analyze the microbial signatures and predict specific foods/diet patterns they likely eat (be concrete - mention specific food types, eating patterns)
+2. Briefly predict specific foods/diet patterns they likely eat (be concrete but short - mention 2-3 specific food types or patterns)
 3. End with exactly: "Does this match your actual diet? If no, describe what kind of diet you normally eat and also if you have any allergies?"
 
-Keep it concise and conversational. Reference specific bacteria from their report that indicate certain dietary patterns."""
+Keep it SHORT and to the point. Maximum 3-4 sentences total."""
                 
             # Check if user just responded to diet question (need energy prediction)
             elif "does this match your actual diet" in recent_content and user_question and "energy levels" not in recent_content and "digestive issues" not in recent_content:
