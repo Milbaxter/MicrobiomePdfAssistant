@@ -141,11 +141,17 @@ class BiomeBot:
             processed_data = pdf_processor.process_pdf(pdf_bytes)
             
             # Create report record
+            sample_date = None
+            if processed_data['metadata'].get('sample_date'):
+                # Convert ISO string back to datetime for database field
+                from datetime import datetime
+                sample_date = datetime.fromisoformat(processed_data['metadata']['sample_date'])
+            
             report = Report(
                 user_id=user.id,
                 thread_id=thread.id,
                 original_filename=attachment.filename,
-                sample_date=processed_data['metadata'].get('sample_date'),
+                sample_date=sample_date,
                 report_metadata=processed_data['metadata']
             )
             db.add(report)
