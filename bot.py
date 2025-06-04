@@ -155,7 +155,7 @@ class BiomeBot:
                 thread = message.channel
                 await message.reply("📊 Analyzing your new microbiome report...")
                 
-            elif hasattr(message.channel, 'create_thread') and isinstance(message.channel, (discord.TextChannel, discord.ForumChannel)):
+            elif isinstance(message.channel, (discord.TextChannel, discord.ForumChannel)):
                 # Create a new thread for upload in guild text channels
                 timestamp = datetime.now().strftime("%H:%M")
                 print(f"🔧 Attempting to create thread in channel: {message.channel.name} (type: {type(message.channel)})")
@@ -171,8 +171,25 @@ class BiomeBot:
                     print(f"❌ Thread creation failed: {e}")
                     thread = message.channel
                     await message.reply("📊 Analyzing your microbiome report...")
+            elif hasattr(message.channel, 'create_thread'):
+                # Handle other channel types that support threads
+                timestamp = datetime.now().strftime("%H:%M")
+                print(f"🔧 Attempting to create thread in channel: {message.channel.name if hasattr(message.channel, 'name') else 'Unknown'} (type: {type(message.channel)})")
+                try:
+                    thread = await message.create_thread(
+                        name=f"🧬 {attachment.filename} - {message.author.display_name} ({timestamp})",
+                        auto_archive_duration=10080  # 7 days
+                    )
+                    print(f"✅ Thread created successfully: {thread.name} (ID: {thread.id})")
+                    await thread.send("📊 Analyzing your microbiome report...")
+                except discord.HTTPException as e:
+                    # If thread creation fails, fall back to replying in channel
+                    print(f"❌ Thread creation failed: {e}")
+                    thread = message.channel
+                    await message.reply("📊 Analyzing your microbiome report...")
             else:
                 # Fallback: reply in the same channel
+                print(f"⚠️ Channel type {type(message.channel)} doesn't support threads, replying in channel")
                 thread = message.channel
                 await message.reply("📊 Analyzing your microbiome report...")
             
