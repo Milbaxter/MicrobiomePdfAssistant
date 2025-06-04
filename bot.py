@@ -348,28 +348,32 @@ class BiomeBot:
     async def check_and_send_followups(self, message: discord.Message, report: Report, conversation_history: List[Dict[str, str]], relevant_chunks: List[str], db: Session):
         """Check conversation stage and send automatic follow-up messages"""
         # Analyze conversation to determine stage
-        recent_messages = conversation_history[-6:]  # Look at last 6 messages
+        recent_messages = conversation_history[-8:]  # Look at last 8 messages
         
-        # Check if we just provided an executive summary (after diet confirmation)
-        if len(recent_messages) >= 2:
-            last_bot_message = None
-            for msg in reversed(recent_messages):
-                if msg['role'] == 'bot':
-                    last_bot_message = msg['content'].lower()
-                    break
+        # Check if user just confirmed/corrected their diet and we need to send executive summary + recommendations
+        if len(recent_messages) >= 4:
+            user_messages = [msg for msg in recent_messages if msg['role'] == 'user']
+            bot_messages = [msg for msg in recent_messages if msg['role'] == 'bot']
             
-            # Check if the last bot message seems to be an executive summary
-            if last_bot_message and any(keyword in last_bot_message for keyword in [
-                'summary', 'findings', 'gut health', 'microbiome', 'overall', 'profile'
-            ]) and 'recommendation' not in last_bot_message and 'feel free to ask' not in last_bot_message:
+            # Check if we just provided an executive summary after diet confirmation
+            if len(bot_messages) >= 1:
+                last_bot_message = bot_messages[-1]['content'].lower()
                 
-                # Send recommendations
-                await self.send_recommendations(message, report, conversation_history, relevant_chunks, db)
-                
-                # Wait a moment then send Q&A invitation
-                import asyncio
-                await asyncio.sleep(2)
-                await self.send_qa_invitation(message, report, db)
+                # Look for executive summary that mentions diet but doesn't have recommendations yet
+                if (any(keyword in last_bot_message for keyword in [
+                    'summary', 'findings', 'gut health', 'microbiome', 'overall', 'profile', 'diet'
+                ]) and 'recommendation' not in last_bot_message and 'feel free to ask' not in last_bot_message
+                and any(diet_keyword in last_bot_message for diet_keyword in [
+                    'diet', 'eating', 'food', 'nutrition'
+                ])):
+                    
+                    # Send recommendations
+                    await self.send_recommendations(message, report, conversation_history, relevant_chunks, db)
+                    
+                    # Wait a moment then send Q&A invitation
+                    import asyncio
+                    await asyncio.sleep(2)
+                    await self.send_qa_invitation(message, report, db)
 
     async def send_recommendations(self, message: discord.Message, report: Report, conversation_history: List[Dict[str, str]], relevant_chunks: List[str], db: Session):
         """Send actionable recommendations as a separate message"""
