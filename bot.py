@@ -279,8 +279,47 @@ class BiomeBot:
                     user_question=message.content
                 )
             
-            # Send response
-            bot_message = await message.reply(response_data['content'])
+            # Send response in chunks if needed (Discord limit: 2000 chars)
+            content = response_data['content']
+            if len(content) <= 2000:
+                bot_message = await message.reply(content)
+            else:
+                # Split into chunks
+                chunks = []
+                current_chunk = ""
+                
+                # Split by paragraphs first
+                paragraphs = content.split('\n\n')
+                
+                for paragraph in paragraphs:
+                    # If adding this paragraph would exceed limit, send current chunk
+                    if len(current_chunk) + len(paragraph) + 2 > 1950:  # Leave buffer
+                        if current_chunk:
+                            chunks.append(current_chunk.strip())
+                            current_chunk = ""
+                    
+                    # If single paragraph is too long, split by sentences
+                    if len(paragraph) > 1950:
+                        sentences = paragraph.split('. ')
+                        for sentence in sentences:
+                            if len(current_chunk) + len(sentence) + 2 > 1950:
+                                if current_chunk:
+                                    chunks.append(current_chunk.strip())
+                                    current_chunk = ""
+                            current_chunk += sentence + ". "
+                    else:
+                        current_chunk += paragraph + "\n\n"
+                
+                # Add remaining content
+                if current_chunk.strip():
+                    chunks.append(current_chunk.strip())
+                
+                # Send first chunk as reply, rest as follow-ups
+                bot_message = await message.reply(chunks[0] if chunks else "Response too long to display.")
+                
+                # Send remaining chunks
+                for chunk in chunks[1:]:
+                    await message.channel.send(chunk)
             
             # Save bot message with cost tracking
             chunk_ids = []  # Would need to track which chunks were used
