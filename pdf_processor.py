@@ -120,7 +120,9 @@ class PDFProcessor:
         # Extract sample date
         sample_date = self.extract_sample_date(text)
         if sample_date:
-            metadata['sample_date'] = sample_date
+            # Store as ISO string for JSON serialization
+            metadata['sample_date'] = sample_date.isoformat()
+            metadata['sample_date_parsed'] = sample_date  # Keep datetime for internal use
             # Calculate age of sample
             now = datetime.now()
             age_months = (now.year - sample_date.year) * 12 + (now.month - sample_date.month)

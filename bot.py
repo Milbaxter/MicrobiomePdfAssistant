@@ -125,13 +125,19 @@ class BiomeBot:
             
             processed_data = pdf_processor.process_pdf(pdf_bytes)
             
+            # Prepare metadata for JSON storage
+            metadata_for_db = processed_data['metadata'].copy()
+            
+            # Extract sample_date_parsed for the database field
+            sample_date = metadata_for_db.pop('sample_date_parsed', None)
+            
             # Create report record
             report = Report(
                 user_id=user.id,
                 thread_id=thread.id,
                 original_filename=attachment.filename,
-                sample_date=processed_data['metadata'].get('sample_date'),
-                report_metadata=processed_data['metadata']
+                sample_date=sample_date,
+                report_metadata=metadata_for_db
             )
             db.add(report)
             db.commit()
@@ -167,8 +173,7 @@ class BiomeBot:
             db.commit()
             
             # Initial analysis based on extracted date
-            if processed_data['metadata'].get('sample_date'):
-                sample_date = processed_data['metadata']['sample_date']
+            if sample_date:
                 age_months = processed_data['metadata'].get('sample_age_months', 0)
                 
                 date_response = f"📅 I see your microbiome report was generated on **{sample_date.strftime('%B %d, %Y')}**\n"
