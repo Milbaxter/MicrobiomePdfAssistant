@@ -56,14 +56,23 @@ class OpenAIClient:
             Dict with response content, token usage, and cost
         """
         
-        # Determine conversation stage and create appropriate prompt
-        last_messages = conversation_history[-6:] if len(conversation_history) >= 6 else conversation_history
-        recent_content = " ".join([msg["content"].lower() for msg in last_messages])
-        
-        # Check if this is diet prediction stage (after antibiotics question)
-        if any(keyword in recent_content for keyword in ["antibiotic", "medication", "supplement"]) and user_question:
-            # Diet prediction stage
-            system_prompt = """You are BiomeAI, an expert microbiome analyst. 
+        # Analyze conversation history to determine stage
+        if len(conversation_history) < 2:
+            # General response for early conversation
+            system_prompt = """You are BiomeAI, an expert microbiome analyst assistant. 
+
+Answer the user's question about their microbiome report using the provided context. Be specific, reference their actual data, and provide actionable insights.
+
+Keep responses focused and under 800 characters. Reference specific bacteria and metrics from their report when relevant."""
+        else:
+            # Look at the last few messages to determine conversation stage
+            last_4_messages = conversation_history[-4:] if len(conversation_history) >= 4 else conversation_history
+            recent_content = " ".join([msg["content"].lower() for msg in last_4_messages])
+            
+            # Check if this is diet prediction stage (after antibiotics question)
+            if any(keyword in recent_content for keyword in ["antibiotic", "medication", "supplement"]) and user_question and "does this match your actual diet" not in recent_content:
+                # Diet prediction stage
+                system_prompt = """You are BiomeAI, an expert microbiome analyst. 
 
 Your task: Predict the user's diet based on their microbiome report.
 
@@ -73,21 +82,9 @@ Your response should:
 3. End with exactly: "Does this match your actual diet? If no, describe what kind of diet you normally eat and also if you have any allergies?"
 
 Keep it concise and conversational. Reference specific bacteria from their report that indicate certain dietary patterns."""
-            
-        elif any(keyword in recent_content for keyword in ["diet", "allergy", "eating", "food"]) and len([msg for msg in last_messages if msg.get("role") == "user"]) >= 2:
-            # Analyze the last few messages to determine stage
-            user_messages = [msg for msg in last_messages if msg.get("role") == "user"]
-            bot_messages = [msg for msg in last_messages if msg.get("role") == "bot"]
-            
-            # Check if the last bot message was asking about diet
-            last_bot_message = bot_messages[-1]["content"].lower() if bot_messages else ""
-            last_user_message = user_messages[-1]["content"].lower() if user_messages else ""
-            
-            # If bot asked about diet and user just responded about diet (without energy/digestive mentions)
-            if ("does this match your actual diet" in last_bot_message and 
-                not any(energy_word in last_user_message for energy_word in ["energy", "digestive", "bloating", "tired", "fatigue"]) and
-                not any(energy_word in last_bot_message for energy_word in ["energy", "digestive", "bloating"])):
                 
+            # Check if user just responded to diet question (and we need energy/digestive prediction)
+            elif "does this match your actual diet" in recent_content and user_question and "is this accurate" not in recent_content and "energy levels throughout the day" not in recent_content:
                 # Energy/digestive prediction stage
                 system_prompt = """You are BiomeAI, an expert microbiome analyst.
 
@@ -101,8 +98,9 @@ Your response should:
 
 Keep it focused and reference specific bacteria from their report."""
                 
-            elif any(energy_word in last_user_message for energy_word in ["energy", "digestive", "bloating", "tired", "fatigue"]):
-                # Executive summary stage (after energy/digestive confirmation)
+            # Check if user responded to energy/digestive question (need executive summary)
+            elif ("is this accurate" in recent_content or "energy levels throughout the day" in recent_content) and user_question:
+                # Executive summary stage
                 system_prompt = """You are BiomeAI, an expert microbiome analyst.
 
 Your task: Provide an executive summary combining the microbiome report with the user's confirmed diet, energy, and digestive information.
@@ -116,24 +114,10 @@ Then provide a comprehensive summary covering:
 - Overall gut health assessment
 
 Keep it focused and informative. DO NOT include recommendations in this message - that comes separately next."""
-            
+                
             else:
-                # Energy/digestive prediction stage (fallback for diet confirmation)
-                system_prompt = """You are BiomeAI, an expert microbiome analyst.
-
-Your task: Based on the microbiome report and confirmed diet, predict the user's energy levels and digestive issues.
-
-Your response should:
-1. Analyze the microbial patterns to predict their likely energy state (high energy, low energy, energy crashes, etc.)
-2. Predict likely digestive issues based on their microbiome (bloating, gas, irregular bowel movements, etc.)
-3. Be specific about what the bacteria in their report suggest about these symptoms
-4. End with: "Is this accurate? Please describe any digestive issues you experience and your typical energy levels throughout the day."
-
-Keep it focused and reference specific bacteria from their report."""
-            
-        else:
-            # General Q&A stage
-            system_prompt = """You are BiomeAI, an expert microbiome analyst assistant. 
+                # General Q&A stage
+                system_prompt = """You are BiomeAI, an expert microbiome analyst assistant. 
 
 Answer the user's question about their microbiome report using the provided context. Be specific, reference their actual data, and provide actionable insights.
 
