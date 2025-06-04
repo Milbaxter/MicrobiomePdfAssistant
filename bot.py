@@ -120,10 +120,13 @@ class BiomeBot:
                 thread = message.channel
                 await message.reply("📊 Analyzing your microbiome report...")
             elif hasattr(message.channel, 'create_thread') and isinstance(message.channel, (discord.TextChannel, discord.ForumChannel)):
-                # Create thread for guild text channels
+                # Create thread for guild text channels - always create a new thread for each PDF
                 try:
+                    # Include timestamp to ensure unique thread names
+                    import time
+                    timestamp = int(time.time())
                     thread = await message.create_thread(
-                        name=f"🧬 {attachment.filename} - {message.author.display_name}",
+                        name=f"🧬 {attachment.filename[:30]}... - {message.author.display_name} ({timestamp})",
                         auto_archive_duration=10080  # 7 days
                     )
                     await thread.send("📊 Analyzing your microbiome report...")
@@ -234,8 +237,11 @@ class BiomeBot:
     
     async def handle_thread_message(self, message: discord.Message, db: Session):
         """Handle message in an existing thread"""
-        # Find report by thread ID (or channel ID for DMs)
-        report = db.query(Report).filter(Report.thread_id == message.channel.id).first()
+        # Find the most recent report by thread ID (or channel ID for DMs)
+        # This allows multiple reports in the same thread/channel
+        report = db.query(Report).filter(
+            Report.thread_id == message.channel.id
+        ).order_by(Report.created_at.desc()).first()
         
         if not report:
             return  # Not a report thread/channel
