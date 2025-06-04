@@ -172,16 +172,39 @@ class BiomeBot:
             
             db.commit()
             
-            # Initial analysis based on extracted date
-            if sample_date:
-                age_months = processed_data['metadata'].get('sample_age_months', 0)
-                
-                date_response = f"📅 I see your microbiome report was generated on **{sample_date.strftime('%B %d, %Y')}**\n"
-                date_response += f"That's roughly **{age_months} months** ago. Gut profiles can shift fast, so I'll keep that in mind.\n\n"
-            else:
-                date_response = "Looks like the report date is missing.\nWhen did you take this test? (Month & year is enough.)\n\n"
+            # Generate predictions about user's diet and health based on microbiome data
+            await thread.send("🔍 Analyzing your gut bacteria patterns...")
             
-            date_response += "Did you take any antibiotics around the time of the test?"
+            try:
+                predictions = openai_client.generate_diet_and_health_predictions(
+                    processed_data['text_content'], 
+                    processed_data['metadata']
+                )
+                
+                # Initial analysis with date and predictions
+                if sample_date:
+                    age_months = processed_data['metadata'].get('sample_age_months', 0)
+                    date_response = f"📅 I see your microbiome report was generated on **{sample_date.strftime('%B %d, %Y')}** ({age_months} months ago).\n\n"
+                else:
+                    date_response = "📅 Report date unclear - when did you take this test?\n\n"
+                
+                date_response += "🔬 **Based on your gut bacteria, here's what I predict:**\n\n"
+                date_response += predictions['content']
+                date_response += "\n\n**Are these predictions accurate?** Please tell me:\n"
+                date_response += "• Your typical diet & any restrictions\n"
+                date_response += "• Current digestive symptoms\n" 
+                date_response += "• Any antibiotics recently?"
+                
+            except Exception as e:
+                print(f"Error generating predictions: {e}")
+                # Fallback to simpler flow
+                if sample_date:
+                    age_months = processed_data['metadata'].get('sample_age_months', 0)
+                    date_response = f"📅 Report from **{sample_date.strftime('%B %d, %Y')}** ({age_months} months ago)\n\n"
+                else:
+                    date_response = "📅 When did you take this test?\n\n"
+                
+                date_response += "Please tell me about:\n• Your typical diet & restrictions\n• Current digestive symptoms\n• Any recent antibiotics?"
             
             # Send initial response
             bot_message = await thread.send(date_response)

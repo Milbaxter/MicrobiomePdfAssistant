@@ -66,6 +66,7 @@ Key principles:
 - Give actionable recommendations when appropriate
 - Reference specific findings from their report when possible
 - Keep responses conversational but informative
+- IMPORTANT: Keep all responses under 1800 characters - be concise and to the point
 
 When analyzing reports:
 1. First establish context (report date, any lifestyle factors)
@@ -73,7 +74,7 @@ When analyzing reports:
 3. Suggest actionable next steps
 4. Be ready to answer specific questions about their results
 
-Remember: You're analyzing real medical data, so be accurate and suggest consulting healthcare providers for medical decisions."""
+Remember: You're analyzing real medical data, so be accurate and suggest consulting healthcare providers for medical decisions. Always keep responses brief and focused."""
 
         # Prepare messages
         messages = [{"role": "system", "content": system_prompt}]
@@ -121,6 +122,11 @@ Remember: You're analyzing real medical data, so be accurate and suggest consult
             
             # Extract response data
             content = response.choices[0].message.content
+            
+            # Truncate content to Discord's 2000 character limit
+            if content and len(content) > 1950:  # Leave some buffer
+                content = content[:1947] + "..."
+            
             input_tokens = response.usage.prompt_tokens
             output_tokens = response.usage.completion_tokens
             cost = self.calculate_chat_cost(input_tokens, output_tokens)
@@ -134,6 +140,48 @@ Remember: You're analyzing real medical data, so be accurate and suggest consult
             
         except Exception as e:
             print(f"Error in OpenAI chat completion: {e}")
+            raise
+
+    def generate_diet_and_health_predictions(self, pdf_content: str, user_metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate predictions about user's diet and health based on microbiome report"""
+        
+        prompt = f"""Based on this microbiome report, analyze the bacterial composition and make educated predictions about:
+
+1. DIET PREDICTION: What does their gut bacteria suggest they typically eat? (plant-heavy, meat-heavy, processed foods, fiber intake, etc.)
+2. DIGESTIVE SYMPTOMS: What digestive issues might they be experiencing? (bloating, irregularity, gas, etc.)
+3. HEALTH PATTERNS: Any other health concerns their microbiome might indicate?
+
+Microbiome Report Content:
+{pdf_content[:3000]}
+
+Format your response as 3 clear predictions with brief explanations. Be specific but acknowledge these are educated guesses that need confirmation.
+Keep under 1500 characters total."""
+
+        try:
+            response = self.client.chat.completions.create(
+                model=CHAT_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=600,
+                temperature=0.7
+            )
+            
+            content = response.choices[0].message.content
+            if content and len(content) > 1500:
+                content = content[:1497] + "..."
+            
+            input_tokens = response.usage.prompt_tokens
+            output_tokens = response.usage.completion_tokens
+            cost = self.calculate_chat_cost(input_tokens, output_tokens)
+            
+            return {
+                "content": content,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "cost_usd": cost
+            }
+            
+        except Exception as e:
+            print(f"Error generating predictions: {e}")
             raise
 
     def generate_executive_summary(self, pdf_content: str, user_metadata: Dict[str, Any]) -> Dict[str, Any]:
