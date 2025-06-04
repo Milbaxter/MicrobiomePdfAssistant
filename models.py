@@ -29,7 +29,7 @@ class Report(Base):
     thread_id = Column(BigInteger, nullable=False, unique=True)  # Discord thread ID
     original_filename = Column(String(255))
     sample_date = Column(DateTime(timezone=True))
-    metadata = Column(JSON, default=dict)  # Store additional info like user details
+    report_metadata = Column(JSON, default=dict)  # Store additional info like user details
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     

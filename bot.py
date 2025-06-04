@@ -26,7 +26,7 @@ class BiomeBot:
     def __init__(self):
         self.processing_users = set()  # Track users currently processing PDFs
     
-    async def ensure_user_exists(self, discord_user: discord.User, db: Session) -> User:
+    async def ensure_user_exists(self, discord_user, db: Session) -> User:
         """Ensure user exists in database"""
         user = db.query(User).filter(User.id == discord_user.id).first()
         if not user:
@@ -131,7 +131,7 @@ class BiomeBot:
                 thread_id=thread.id,
                 original_filename=attachment.filename,
                 sample_date=processed_data['metadata'].get('sample_date'),
-                metadata=processed_data['metadata']
+                report_metadata=processed_data['metadata']
             )
             db.add(report)
             db.commit()

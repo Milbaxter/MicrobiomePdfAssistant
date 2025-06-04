@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import QueuePool
 
@@ -36,7 +36,7 @@ def init_database():
     # Create pgvector extension
     with engine.connect() as conn:
         try:
-            conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
             conn.commit()
             print("✅ pgvector extension enabled")
         except Exception as e:

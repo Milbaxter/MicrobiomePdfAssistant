@@ -4,9 +4,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Discord Bot Configuration
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN_V2") or os.getenv("DISCORD_TOKEN")
 if not DISCORD_TOKEN:
-    raise ValueError("DISCORD_TOKEN environment variable is required")
+    raise ValueError("DISCORD_TOKEN or DISCORD_TOKEN_V2 environment variable is required")
 
 # OpenAI Configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
