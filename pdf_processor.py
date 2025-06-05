@@ -17,12 +17,22 @@ class PDFProcessor:
             
             text_content = []
             for page in pdf_reader.pages:
-                text = page.extract_text()
-                if text.strip():
-                    text_content.append(text)
+                try:
+                    text = page.extract_text()
+                    if text and text.strip():
+                        # Clean text immediately to prevent downstream issues
+                        cleaned_text = self.clean_text(text)
+                        if cleaned_text:
+                            text_content.append(cleaned_text)
+                except Exception as page_error:
+                    print(f"Warning: Failed to extract text from page: {page_error}")
+                    continue
+            
+            if not text_content:
+                raise Exception("No readable text found in PDF")
             
             full_text = "\n\n".join(text_content)
-            return self.clean_text(full_text)
+            return full_text
             
         except Exception as e:
             print(f"Error extracting PDF text: {e}")
@@ -30,6 +40,10 @@ class PDFProcessor:
     
     def clean_text(self, text: str) -> str:
         """Clean and normalize extracted text"""
+        # Remove NUL characters and other problematic bytes
+        text = text.replace('\x00', ' ')  # Replace NUL characters
+        text = ''.join(char for char in text if ord(char) >= 32 or char in '\n\t\r')
+        
         # Remove excessive whitespace
         text = re.sub(r'\s+', ' ', text)
         
