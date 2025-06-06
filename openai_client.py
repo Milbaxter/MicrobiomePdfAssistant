@@ -130,7 +130,7 @@ Then provide a comprehensive summary covering:
 - How their confirmed diet impacts their gut health
 - Integration of their energy levels and digestive symptoms
 - Overall gut health assessment
-- One actionable call to action
+- Call to action with actionable insights
 
 Keep it focused and informative."""
 
